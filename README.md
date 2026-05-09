@@ -25,4 +25,8 @@ npm run build
 
 ## Render deploy
 
-This project includes [render.yaml](C:/Users/shezi/Downloads/KasiEats/render.yaml) so it can be deployed to Render as a single Node web service that serves both the API and the built frontend.
+This project includes [`render.yaml`](./render.yaml) so it can be deployed to Render as a single Node web service that serves both the API and the built frontend.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/CayShezi/KasiEats)
+
+If the repository stays private, Render's GitHub app needs access to this repo before the deploy can complete.
