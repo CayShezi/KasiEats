@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
+import { config } from './config.js'
 import { stats, zones } from './data.js'
 import { all, get, mapVendorMenuItems, run, transaction } from './db.js'
 
@@ -45,6 +46,8 @@ const currency = new Intl.NumberFormat('en-ZA', {
 })
 
 const zoneMap = new Map(zones.map((zone) => [zone.id, zone]))
+const maxStoredUserAgentLength = 255
+const maxStoredMessageLength = 320
 
 function parseJson(value, fallback) {
   try {
@@ -58,6 +61,27 @@ function createHttpError(statusCode, message) {
   const error = new Error(message)
   error.statusCode = statusCode
   return error
+}
+
+function normalizeEmail(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function trimForStorage(value, maxLength) {
+  return String(value ?? '').trim().slice(0, maxLength)
+}
+
+function parseFutureDate(value) {
+  if (!value) {
+    return null
+  }
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) || date.getTime() <= Date.now() ? null : date
+}
+
+function minutesUntil(date) {
+  return Math.max(1, Math.ceil((date.getTime() - Date.now()) / 60_000))
 }
 
 function resolveZone(zoneId) {
@@ -196,6 +220,14 @@ function listUsersByRole(role) {
   return all('SELECT * FROM users WHERE role = ? ORDER BY rowid ASC', [role]).map(toPublicUser)
 }
 
+function getUserRowById(userId) {
+  return get('SELECT * FROM users WHERE id = ?', [userId]) ?? null
+}
+
+function getUserRowByEmail(email) {
+  return get('SELECT * FROM users WHERE email = ?', [normalizeEmail(email)]) ?? null
+}
+
 function userMatchesZone(user, zoneId) {
   return !user.zoneIds || user.zoneIds.includes(zoneId)
 }
@@ -222,19 +254,179 @@ export function toPublicUser(user) {
   }
 }
 
+export function logSecurityEvent({
+  eventType,
+  userId = null,
+  email = null,
+  role = null,
+  ipAddress = null,
+  userAgent = null,
+  targetType = null,
+  targetId = null,
+  success,
+  message,
+}) {
+  run(
+    `
+      INSERT INTO security_events (
+        id, event_type, user_id, email, role, ip_address, user_agent,
+        target_type, target_id, success, message
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      randomUUID(),
+      eventType,
+      userId,
+      email ? normalizeEmail(email) : null,
+      role,
+      ipAddress ? trimForStorage(ipAddress, 120) : null,
+      userAgent ? trimForStorage(userAgent, maxStoredUserAgentLength) : null,
+      targetType,
+      targetId,
+      success ? 1 : 0,
+      trimForStorage(message, maxStoredMessageLength),
+    ],
+  )
+}
+
 export function getUserById(userId) {
-  const user = get('SELECT * FROM users WHERE id = ?', [userId])
+  const user = getUserRowById(userId)
   return user ? toPublicUser(user) : null
 }
 
-export function verifyUserCredentials(email, password) {
-  const row = get('SELECT * FROM users WHERE email = ?', [email.toLowerCase()])
+export function getAuthUserSnapshot(userId) {
+  const user = getUserRowById(userId)
 
-  if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+  if (!user) {
+    return null
+  }
+
+  return {
+    user: toPublicUser(user),
+    tokenVersion: Number(user.token_version ?? 1),
+    lockedUntil: user.locked_until ?? null,
+  }
+}
+
+export function verifyUserCredentials(email, password, securityContext = {}) {
+  const normalizedEmail = normalizeEmail(email)
+  const row = getUserRowByEmail(normalizedEmail)
+
+  if (!row) {
+    logSecurityEvent({
+      eventType: 'auth.login.failed',
+      email: normalizedEmail,
+      ipAddress: securityContext.ipAddress,
+      userAgent: securityContext.userAgent,
+      success: false,
+      message: 'Unknown email address.',
+    })
     throw createHttpError(401, 'Incorrect email or password.')
   }
 
-  return toPublicUser(row)
+  const lockedUntil = parseFutureDate(row.locked_until)
+
+  if (lockedUntil) {
+    logSecurityEvent({
+      eventType: 'auth.login.blocked',
+      userId: row.id,
+      email: row.email,
+      role: row.role,
+      ipAddress: securityContext.ipAddress,
+      userAgent: securityContext.userAgent,
+      success: false,
+      message: `Account locked until ${lockedUntil.toISOString()}.`,
+    })
+    throw createHttpError(
+      423,
+      `Account temporarily locked. Try again in about ${minutesUntil(lockedUntil)} minute(s).`,
+    )
+  }
+
+  if (!bcrypt.compareSync(password, row.password_hash)) {
+    const nextFailedAttempts = Number(row.failed_login_attempts ?? 0) + 1
+
+    if (nextFailedAttempts >= config.loginMaxAttempts) {
+      const nextLockedUntil = new Date(Date.now() + config.loginLockMinutes * 60_000).toISOString()
+
+      run(
+        `
+          UPDATE users
+          SET failed_login_attempts = 0,
+              locked_until = ?,
+              token_version = COALESCE(token_version, 1) + 1
+          WHERE id = ?
+        `,
+        [nextLockedUntil, row.id],
+      )
+
+      logSecurityEvent({
+        eventType: 'auth.login.locked',
+        userId: row.id,
+        email: row.email,
+        role: row.role,
+        ipAddress: securityContext.ipAddress,
+        userAgent: securityContext.userAgent,
+        success: false,
+        message: `Account locked after ${config.loginMaxAttempts} failed sign-in attempts.`,
+      })
+
+      throw createHttpError(
+        423,
+        `Account temporarily locked after repeated sign-in attempts. Try again in ${config.loginLockMinutes} minute(s).`,
+      )
+    }
+
+    run('UPDATE users SET failed_login_attempts = ? WHERE id = ?', [nextFailedAttempts, row.id])
+
+    logSecurityEvent({
+      eventType: 'auth.login.failed',
+      userId: row.id,
+      email: row.email,
+      role: row.role,
+      ipAddress: securityContext.ipAddress,
+      userAgent: securityContext.userAgent,
+      success: false,
+      message: `Invalid password attempt ${nextFailedAttempts} of ${config.loginMaxAttempts}.`,
+    })
+
+    throw createHttpError(401, 'Incorrect email or password.')
+  }
+
+  run(
+    `
+      UPDATE users
+      SET failed_login_attempts = 0,
+          locked_until = NULL,
+          last_login_at = ?,
+          last_login_ip = ?,
+          last_login_user_agent = ?
+      WHERE id = ?
+    `,
+    [
+      new Date().toISOString(),
+      securityContext.ipAddress ? trimForStorage(securityContext.ipAddress, 120) : null,
+      securityContext.userAgent ? trimForStorage(securityContext.userAgent, maxStoredUserAgentLength) : null,
+      row.id,
+    ],
+  )
+
+  logSecurityEvent({
+    eventType: 'auth.login.success',
+    userId: row.id,
+    email: row.email,
+    role: row.role,
+    ipAddress: securityContext.ipAddress,
+    userAgent: securityContext.userAgent,
+    success: true,
+    message: 'Sign-in successful.',
+  })
+
+  return {
+    user: toPublicUser(row),
+    tokenVersion: Number(row.token_version ?? 1),
+  }
 }
 
 export function getMarketplace({ zoneId, search } = {}) {
@@ -328,9 +520,8 @@ export function getRiderDashboard(user) {
     (order) =>
       order.payment_status !== 'pending' &&
       userMatchesZone(user, order.zone_id) &&
-      ((order.assigned_rider_id === user.id && order.status !== 'delivered') ||
-        order.status === 'ready' ||
-        order.status === 'on-route'),
+      ((order.status === 'ready' && (!order.assigned_rider_id || order.assigned_rider_id === user.id)) ||
+        (order.assigned_rider_id === user.id && order.status !== 'delivered')),
   )
 
   const completedToday = listOrders().filter((order) => {
@@ -395,6 +586,10 @@ export function getOrderById(orderId, role = 'customer', message) {
 }
 
 export function createOrder(payload, actor) {
+  if (actor && actor.role !== 'customer') {
+    throw createHttpError(403, 'Only customer accounts can place storefront orders.')
+  }
+
   const vendorId = payload.items[0]?.vendorId
 
   if (!vendorId || payload.items.some((item) => item.vendorId !== vendorId)) {
@@ -470,7 +665,7 @@ export function createOrder(payload, actor) {
   )
 }
 
-export function updateOrderStatus(orderId, nextStatus, user) {
+export function updateOrderStatus(orderId, nextStatus, user, securityContext = {}) {
   const row = get('SELECT * FROM orders WHERE id = ?', [orderId])
 
   if (!row) {
@@ -487,6 +682,10 @@ export function updateOrderStatus(orderId, nextStatus, user) {
 
   if (user.role === 'rider' && !userMatchesZone(user, row.zone_id)) {
     throw createHttpError(403, 'This route does not belong to your delivery zone.')
+  }
+
+  if (user.role === 'rider' && row.assigned_rider_id && row.assigned_rider_id !== user.id) {
+    throw createHttpError(403, 'This delivery is already assigned to another rider.')
   }
 
   const allowedNextStatuses = getAllowedNextStatuses(user.role, row.status, row.payment_status)
@@ -509,7 +708,26 @@ export function updateOrderStatus(orderId, nextStatus, user) {
     ],
   )
 
-  return getOrderById(orderId, user.role, `Order ${orderId} moved to ${statusLabels[nextStatus].toLowerCase()}.`)
+  const updatedOrder = getOrderById(
+    orderId,
+    user.role,
+    `Order ${orderId} moved to ${statusLabels[nextStatus].toLowerCase()}.`,
+  )
+
+  logSecurityEvent({
+    eventType: 'order.status.updated',
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    ipAddress: securityContext.ipAddress,
+    userAgent: securityContext.userAgent,
+    targetType: 'order',
+    targetId: orderId,
+    success: true,
+    message: `Moved order from ${row.status} to ${nextStatus}.`,
+  })
+
+  return updatedOrder
 }
 
 export function attachCheckoutSession(orderId, sessionId, checkoutUrl) {

@@ -1,6 +1,14 @@
+import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { config } from './config.js'
-import { getUserById } from './store.js'
+import { getAuthUserSnapshot } from './store.js'
+
+const tokenTtls = {
+  customer: config.customerTokenTtl,
+  vendor: config.vendorTokenTtl,
+  rider: config.riderTokenTtl,
+  admin: config.adminTokenTtl,
+}
 
 function readBearerToken(request) {
   const header = request.headers.authorization ?? ''
@@ -12,15 +20,20 @@ function readBearerToken(request) {
   return header.slice(7).trim()
 }
 
-export function issueToken(user) {
+export function issueToken(user, { tokenVersion = 1 } = {}) {
   return jwt.sign(
     {
       sub: user.id,
       role: user.role,
+      ver: tokenVersion,
+      sid: randomUUID(),
     },
     config.jwtSecret,
     {
-      expiresIn: '8h',
+      algorithm: 'HS256',
+      audience: config.jwtAudience,
+      issuer: config.jwtIssuer,
+      expiresIn: tokenTtls[user.role] ?? config.customerTokenTtl,
     },
   )
 }
@@ -34,21 +47,35 @@ export function authenticateOptional(request, response, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, config.jwtSecret)
-    const user = getUserById(decoded.sub)
+    const decoded = jwt.verify(token, config.jwtSecret, {
+      algorithms: ['HS256'],
+      audience: config.jwtAudience,
+      issuer: config.jwtIssuer,
+    })
+    const authUser = getAuthUserSnapshot(decoded.sub)
 
-    if (!user) {
+    if (
+      !authUser ||
+      authUser.user.role !== decoded.role ||
+      authUser.tokenVersion !== Number(decoded.ver ?? 0) ||
+      (authUser.lockedUntil && new Date(authUser.lockedUntil).getTime() > Date.now())
+    ) {
       response.status(401).json({
-        message: 'Session expired. Please log in again.',
+        message: 'Session no longer matches the current account security state. Please sign in again.',
       })
       return
     }
 
-    request.user = user
+    request.user = authUser.user
+    request.auth = {
+      expiresAt: typeof decoded.exp === 'number' ? decoded.exp * 1000 : null,
+      issuedAt: typeof decoded.iat === 'number' ? decoded.iat * 1000 : null,
+      sessionId: typeof decoded.sid === 'string' ? decoded.sid : null,
+    }
     next()
-  } catch {
+  } catch (error) {
     response.status(401).json({
-      message: 'Invalid access token.',
+      message: error?.name === 'TokenExpiredError' ? 'Session expired. Please log in again.' : 'Invalid access token.',
     })
   }
 }

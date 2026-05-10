@@ -108,13 +108,47 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS security_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    user_id TEXT,
+    email TEXT,
+    role TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    target_type TEXT,
+    target_id TEXT,
+    success INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
   CREATE INDEX IF NOT EXISTS idx_orders_vendor_id ON orders(vendor_id);
   CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
   CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
   CREATE INDEX IF NOT EXISTS idx_menu_items_vendor_id ON menu_items(vendor_id);
   CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);
+  CREATE INDEX IF NOT EXISTS idx_security_events_user_id ON security_events(user_id);
+  CREATE INDEX IF NOT EXISTS idx_security_events_type ON security_events(event_type);
 `)
+
+function columnExists(tableName, columnName) {
+  return all(`PRAGMA table_info(${tableName})`).some((column) => column.name === columnName)
+}
+
+function ensureColumn(tableName, columnName, definition) {
+  if (!columnExists(tableName, columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`)
+  }
+}
+
+ensureColumn('users', 'token_version', 'INTEGER NOT NULL DEFAULT 1')
+ensureColumn('users', 'failed_login_attempts', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('users', 'locked_until', 'TEXT')
+ensureColumn('users', 'last_login_at', 'TEXT')
+ensureColumn('users', 'last_login_ip', 'TEXT')
+ensureColumn('users', 'last_login_user_agent', 'TEXT')
 
 function run(sql, params = []) {
   return db.prepare(sql).run(...params)

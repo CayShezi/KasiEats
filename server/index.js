@@ -18,6 +18,7 @@ import {
   getMarketplace,
   getRiderDashboard,
   getVendorDashboard,
+  logSecurityEvent,
   markCheckoutFailed,
   markCheckoutPaid,
   markOrderPaymentStatus,
@@ -65,6 +66,44 @@ function isSameOriginRequest(origin, request) {
   }
 }
 
+function getRequestSecurityContext(request) {
+  return {
+    ipAddress:
+      firstForwardedValue(request.headers['x-forwarded-for']) ||
+      firstForwardedValue(request.headers['x-real-ip']) ||
+      request.ip ||
+      '',
+    userAgent: String(request.get('user-agent') ?? '').slice(0, 255),
+  }
+}
+
+function assertAllowedRedirectUrl(candidate, request, fieldName) {
+  if (!candidate) {
+    return undefined
+  }
+
+  let parsedUrl
+
+  try {
+    parsedUrl = new URL(candidate)
+  } catch {
+    throw createHttpError(400, `${fieldName} must be a valid URL.`)
+  }
+
+  const isAllowedOrigin =
+    isSameOriginRequest(parsedUrl.origin, request) || config.allowedOrigins.includes(parsedUrl.origin)
+
+  if (!isAllowedOrigin) {
+    throw createHttpError(400, `${fieldName} must match an allowed web origin.`)
+  }
+
+  if (config.isProduction && parsedUrl.protocol !== 'https:') {
+    throw createHttpError(400, `${fieldName} must use https in production.`)
+  }
+
+  return parsedUrl.toString()
+}
+
 function runInBackground(promise, label) {
   void promise.catch((error) => {
     console.error(`${label} failed`, error)
@@ -73,6 +112,16 @@ function runInBackground(promise, label) {
 
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
+const loginRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: config.loginRateLimitMax,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: 'Too many sign-in attempts. Please wait a moment and try again.',
+  },
+})
 app.use(
   helmet({
     crossOriginResourcePolicy: false,
@@ -169,15 +218,23 @@ app.use((request, response, next) => {
 })
 
 app.get('/api/health', (_request, response) => {
-  response.json({
+  const payload = {
     ok: true,
-    env: config.env,
     service: 'KasiEats API',
-    database: 'sqlite',
-    stripeReady: isStripeReady(),
-    pushProvider: 'expo',
     timestamp: new Date().toISOString(),
-  })
+  }
+
+  response.json(
+    config.isProduction
+      ? payload
+      : {
+          ...payload,
+          env: config.env,
+          database: 'sqlite',
+          stripeReady: isStripeReady(),
+          pushProvider: 'expo',
+        },
+  )
 })
 
 app.get('/api/marketplace', (request, response) => {
@@ -206,14 +263,18 @@ app.get('/api/zones', (_request, response) => {
   response.json(getMarketplace().zones)
 })
 
-app.post('/api/auth/login', (request, response, next) => {
+app.post('/api/auth/login', loginRateLimiter, (request, response, next) => {
   try {
     const credentials = parseWithSchema(loginSchema, request.body)
-    const user = verifyUserCredentials(credentials.email, credentials.password)
+    const session = verifyUserCredentials(
+      credentials.email,
+      credentials.password,
+      getRequestSecurityContext(request),
+    )
 
     response.json({
-      token: issueToken(user),
-      user,
+      token: issueToken(session.user, { tokenVersion: session.tokenVersion }),
+      user: session.user,
     })
   } catch (error) {
     next(error)
@@ -257,8 +318,12 @@ app.post('/api/push/register', authenticateOptional, requireAuth, (request, resp
 })
 
 app.post('/api/orders', authenticateOptional, async (request, response, next) => {
+  const securityContext = getRequestSecurityContext(request)
+
   try {
     const payload = parseWithSchema(orderSubmissionSchema, request.body)
+    const successUrl = assertAllowedRedirectUrl(payload.successUrl, request, 'successUrl')
+    const cancelUrl = assertAllowedRedirectUrl(payload.cancelUrl, request, 'cancelUrl')
 
     if (payload.paymentMethod === 'card' && !isStripeReady()) {
       throw createHttpError(503, 'Card payments are unavailable until Stripe keys are configured.')
@@ -271,8 +336,8 @@ app.post('/api/orders', authenticateOptional, async (request, response, next) =>
         const checkoutSession = await createCheckoutSessionForOrder({
           request,
           order,
-          successUrl: payload.successUrl,
-          cancelUrl: payload.cancelUrl,
+          successUrl,
+          cancelUrl,
           customerEmail: request.user?.email ?? null,
         })
 
@@ -290,6 +355,20 @@ app.post('/api/orders', authenticateOptional, async (request, response, next) =>
 
     response.status(201).json(order)
   } catch (error) {
+    if (request.user && error.statusCode === 403) {
+      logSecurityEvent({
+        eventType: 'order.create.denied',
+        userId: request.user.id,
+        email: request.user.email,
+        role: request.user.role,
+        ipAddress: securityContext.ipAddress,
+        userAgent: securityContext.userAgent,
+        targetType: 'order',
+        success: false,
+        message: error.message ?? 'Storefront order request denied.',
+      })
+    }
+
     next(error)
   }
 })
@@ -299,14 +378,28 @@ app.patch(
   authenticateOptional,
   requireRole('vendor', 'rider', 'admin'),
   (request, response, next) => {
+    const securityContext = getRequestSecurityContext(request)
+
     try {
       const payload = parseWithSchema(orderStatusSchema, request.body)
-      const order = updateOrderStatus(request.params.orderId, payload.status, request.user)
+      const order = updateOrderStatus(request.params.orderId, payload.status, request.user, securityContext)
 
       runInBackground(notifyOrderStatus(order), `push notifications for status ${order.orderId}`)
 
       response.json(order)
     } catch (error) {
+      logSecurityEvent({
+        eventType: 'order.status.denied',
+        userId: request.user.id,
+        email: request.user.email,
+        role: request.user.role,
+        ipAddress: securityContext.ipAddress,
+        userAgent: securityContext.userAgent,
+        targetType: 'order',
+        targetId: request.params.orderId,
+        success: false,
+        message: error.message ?? 'Order status change denied.',
+      })
       next(error)
     }
   },
