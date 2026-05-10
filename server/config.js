@@ -3,7 +3,8 @@ import path from 'node:path'
 const env = process.env.NODE_ENV ?? 'development'
 const isProduction = env === 'production'
 const port = Number(process.env.PORT ?? 4000)
-const rawOrigins = process.env.WEB_ORIGIN ?? 'http://localhost:5173'
+const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://kasieats.onrender.com']
+const rawOrigins = process.env.WEB_ORIGIN ?? defaultOrigins.join(',')
 const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? './data')
 const databasePath = path.resolve(dataDir, process.env.DATABASE_FILENAME ?? 'kasieats.sqlite')
 
