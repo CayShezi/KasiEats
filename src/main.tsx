@@ -1,8 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import { AppErrorBoundary } from './AppErrorBoundary.tsx'
-import App from './App.tsx'
 
 function showFatalClientError(message: string) {
   const root = document.getElementById('root')
@@ -39,10 +37,24 @@ window.addEventListener('unhandledrejection', (event) => {
   showFatalClientError(message)
 })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
-  </StrictMode>,
-)
+async function bootstrap() {
+  try {
+    const [{ default: App }, { AppErrorBoundary }] = await Promise.all([
+      import('./App.tsx'),
+      import('./AppErrorBoundary.tsx'),
+    ])
+
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <AppErrorBoundary>
+          <App />
+        </AppErrorBoundary>
+      </StrictMode>,
+    )
+  } catch (error) {
+    console.error('KasiEats bootstrap failure', error)
+    showFatalClientError(error instanceof Error ? error.message : 'Unable to load the app bundle.')
+  }
+}
+
+void bootstrap()
