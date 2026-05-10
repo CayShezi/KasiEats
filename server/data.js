@@ -26,7 +26,7 @@ export const stats = [
     id: 'avg-time',
     label: 'Average arrival',
     value: '23 min',
-    detail: 'Based on tonight’s route bundle for the selected service area.',
+    detail: "Based on tonight's route bundle for the selected service area.",
   },
   {
     id: 'rating',

@@ -8,15 +8,28 @@
     "dev:client": "vite",
     "dev:server": "node --watch server/index.js",
     "build": "tsc -b && vite build",
+    "check": "npm run lint && npm run build && npm run mobile:typecheck",
     "lint": "eslint .",
+    "mobile:android": "npm --prefix mobile run android",
+    "mobile:start": "npm --prefix mobile start",
+    "mobile:typecheck": "npm --prefix mobile run typecheck",
+    "mobile:web": "npm --prefix mobile run web",
     "start": "node server/index.js",
     "serve:server": "node server/index.js",
     "preview": "vite preview"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "stripe": "^22.1.1",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

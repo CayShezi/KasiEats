@@ -1,3 +1,4 @@
+export type TabId = 'discover' | 'basket' | 'ops' | 'profile'
 export type ZoneId = 'kwamhlanga' | 'kwaggafontein'
 export type UserRole = 'customer' | 'vendor' | 'rider' | 'admin'
 export type OrderStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'on-route' | 'delivered'
@@ -9,7 +10,13 @@ export interface Zone {
   name: string
   eta: string
   coverage: string
-  blurb: string
+}
+
+export interface ServiceStat {
+  id: string
+  label: string
+  value: string
+  detail: string
 }
 
 export interface MenuItem {
@@ -42,13 +49,6 @@ export interface Vendor {
   menu: MenuItem[]
 }
 
-export interface ServiceStat {
-  id: string
-  label: string
-  value: string
-  detail: string
-}
-
 export interface BasketEntry {
   vendorId: string
   item: MenuItem
@@ -64,22 +64,22 @@ export interface OrderFormState {
   paymentMethod: 'cash' | 'card' | 'ewallet'
 }
 
-export interface OrderSubmissionItem {
-  vendorId: string
-  menuItemId: string
-  quantity: number
+export interface SessionUser {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: UserRole
+  vendorId?: string
+  zoneIds?: ZoneId[]
 }
 
-export interface OrderSubmission {
-  customerName: string
-  phone: string
-  address: string
-  zoneId: ZoneId
-  notes: string
-  paymentMethod: OrderFormState['paymentMethod']
-  successUrl?: string
-  cancelUrl?: string
-  items: OrderSubmissionItem[]
+export interface DemoCredential {
+  role: UserRole
+  email: string
+  password: string
+  label: string
+  summary: string
 }
 
 export interface TrackingStep {
@@ -93,7 +93,7 @@ export interface OrderLine {
   name: string
   quantity: number
   price: number
-  prepMinutes: number
+  prepMinutes?: number
 }
 
 export interface OrderRecord {
@@ -110,94 +110,30 @@ export interface OrderRecord {
   paymentUrl: string | null
   notes: string
   total: number
-  deliveryFee: number
   eta: string
   status: OrderStatus
   statusLabel: string
-  placedAt: string
   assignedRiderName: string | null
   trackingSteps: TrackingStep[]
   allowedNextStatuses: OrderStatus[]
   items: OrderLine[]
+  placedAt?: string
   message?: string
 }
 
-export interface SessionUser {
+export interface OrderSeed {
   id: string
-  name: string
-  email: string
-  phone: string
-  role: UserRole
-  vendorId?: string
-  zoneIds?: ZoneId[]
-}
-
-export interface AuthSession {
-  token: string
-  user: SessionUser
-}
-
-export interface DemoCredential {
-  role: UserRole
-  label: string
-  email: string
-  password: string
-  summary: string
-  accent: string
-}
-
-export interface RoleHighlight {
-  role: UserRole
-  title: string
-  summary: string
-  capabilities: string[]
-  accent: string
-}
-
-export interface CustomerDashboard {
+  customerId: string | null
   customerName: string
-  savedZone: string
-  loyaltyNote: string
-  orders: OrderRecord[]
-}
-
-export interface VendorTopItem {
-  name: string
-  orders: number
-}
-
-export interface VendorDashboard {
   vendorId: string
-  vendorName: string
-  queueCount: number
-  readyCount: number
-  avgPrepTime: number
-  topItems: VendorTopItem[]
-  liveOrders: OrderRecord[]
-}
-
-export interface RiderDashboard {
-  riderName: string
-  assignedCount: number
-  completedToday: number
-  earningsToday: number
-  tasks: OrderRecord[]
-}
-
-export interface AdminStage {
+  zoneId: ZoneId
+  address: string
+  paymentMethod: OrderFormState['paymentMethod']
+  paymentStatus?: PaymentStatus
+  notes: string
+  total: number
+  eta: string
   status: OrderStatus
-  label: string
-  count: number
-}
-
-export interface AdminOverview {
-  activeOrders: number
-  deliveredToday: number
-  revenueToday: number
-  vendorsOnline: number
-  ridersLive: number
-  pendingIssues: string[]
-  orderStages: AdminStage[]
-  liveOrders: OrderRecord[]
-  headline: string
+  assignedRiderName: string | null
+  items: OrderLine[]
 }

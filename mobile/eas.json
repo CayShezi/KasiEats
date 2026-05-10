@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 18.11.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://kasieats.onrender.com",
+        "EXPO_PUBLIC_WEB_URL": "https://kasieats.onrender.com"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://kasieats.onrender.com",
+        "EXPO_PUBLIC_WEB_URL": "https://kasieats.onrender.com"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://kasieats.onrender.com",
+        "EXPO_PUBLIC_WEB_URL": "https://kasieats.onrender.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

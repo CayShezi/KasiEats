@@ -1,4 +1,4 @@
-import type { ServiceStat, Vendor, Zone } from './types'
+import type { DemoCredential, RoleHighlight, ServiceStat, Vendor, Zone } from './types'
 
 export const zones: Zone[] = [
   {
@@ -28,13 +28,79 @@ export const seedStats: ServiceStat[] = [
     id: 'avg-time',
     label: 'Average arrival',
     value: '23 min',
-    detail: 'Based on tonight’s route bundle for the selected service area.',
+    detail: "Based on tonight's route bundle for the selected service area.",
   },
   {
     id: 'rating',
     label: 'Neighbour rating',
     value: '4.8 / 5',
     detail: 'People rate clearer drop points and simpler cash handoffs.',
+  },
+]
+
+export const demoCredentials: DemoCredential[] = [
+  {
+    role: 'customer',
+    label: 'Customer',
+    email: 'customer@kasieats.demo',
+    password: 'Welcome123!',
+    summary: 'Places orders, tracks deliveries, and keeps saved drop-off notes.',
+    accent: 'linear-gradient(135deg, #f97316 0%, #ea580c 55%, #7c2d12 100%)',
+  },
+  {
+    role: 'vendor',
+    label: 'Vendor',
+    email: 'vendor@kasieats.demo',
+    password: 'Welcome123!',
+    summary: 'Accepts orders, moves meals through prep, and watches queue pressure.',
+    accent: 'linear-gradient(135deg, #0f766e 0%, #14b8a6 52%, #134e4a 100%)',
+  },
+  {
+    role: 'rider',
+    label: 'Rider',
+    email: 'rider@kasieats.demo',
+    password: 'Welcome123!',
+    summary: 'Claims ready orders, marks them on-route, and closes the drop-off loop.',
+    accent: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 52%, #1e3a8a 100%)',
+  },
+  {
+    role: 'admin',
+    label: 'Admin',
+    email: 'admin@kasieats.demo',
+    password: 'Welcome123!',
+    summary: 'Sees the full operation, watches revenue, and unblocks service issues.',
+    accent: 'linear-gradient(135deg, #be123c 0%, #e11d48 52%, #4c0519 100%)',
+  },
+]
+
+export const roleHighlights: RoleHighlight[] = [
+  {
+    role: 'customer',
+    title: 'Customer ordering',
+    summary: 'Fast checkout, saved landmarks, and order history that fits local delivery reality.',
+    capabilities: ['Guest or signed-in checkout', 'Saved drop-point details', 'Live order timeline'],
+    accent: 'rgba(249, 115, 22, 0.12)',
+  },
+  {
+    role: 'vendor',
+    title: 'Kitchen console',
+    summary: 'Keeps queue pressure visible so small kitchens can move from placed to ready without chaos.',
+    capabilities: ['Queue and ready counts', 'Prep-time visibility', 'One-tap status changes'],
+    accent: 'rgba(20, 184, 166, 0.12)',
+  },
+  {
+    role: 'rider',
+    title: 'Rider dispatch',
+    summary: 'Focuses on route clarity, handoff notes, and fast confirmation once a meal leaves the kitchen.',
+    capabilities: ['Zone-aware task list', 'On-route workflow', 'Daily earnings snapshot'],
+    accent: 'rgba(37, 99, 235, 0.12)',
+  },
+  {
+    role: 'admin',
+    title: 'Operations overview',
+    summary: 'Surfaces revenue, live order stages, and the service issues leadership needs to fix first.',
+    capabilities: ['Cross-role visibility', 'Stage distribution', 'Operational issue feed'],
+    accent: 'rgba(225, 29, 72, 0.12)',
   },
 ]
 
@@ -53,6 +119,15 @@ export const seedVendors: Vendor[] = [
     spotlight: 'linear-gradient(135deg, #f97316 0%, #ea580c 45%, #7c2d12 100%)',
     zoneIds: ['kwamhlanga', 'kwaggafontein'],
     categories: ['Shisanyama', 'Kota', 'Street grill'],
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1200&q=80',
+    galleryImageUrls: [
+      'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80',
+    ],
+    signatureDish: 'Firecracker Kota',
+    deliveryNote: 'Best for grill nights, friend groups, and quick supper runs.',
     menu: [
       {
         id: 'half-chicken-pap',
@@ -61,6 +136,8 @@ export const seedVendors: Vendor[] = [
         price: 95,
         prepMinutes: 20,
         badge: 'Top seller',
+        imageUrl:
+          'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'kota-firecracker',
@@ -69,6 +146,8 @@ export const seedVendors: Vendor[] = [
         price: 68,
         prepMinutes: 14,
         badge: 'Street favourite',
+        imageUrl:
+          'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'wings-loaded-fries',
@@ -76,6 +155,8 @@ export const seedVendors: Vendor[] = [
         description: 'Sticky wings on masala fries with creamy slaw.',
         price: 82,
         prepMinutes: 16,
+        imageUrl:
+          'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'family-grill-pack',
@@ -84,6 +165,8 @@ export const seedVendors: Vendor[] = [
         price: 210,
         prepMinutes: 28,
         badge: 'Weekend combo',
+        imageUrl:
+          'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=900&q=80',
       },
     ],
   },
@@ -101,6 +184,15 @@ export const seedVendors: Vendor[] = [
     spotlight: 'linear-gradient(135deg, #f59e0b 0%, #b45309 52%, #78350f 100%)',
     zoneIds: ['kwaggafontein', 'kwamhlanga'],
     categories: ['Home plates', 'Stew bowls', 'Lunch specials'],
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=80',
+    galleryImageUrls: [
+      'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1516684732162-798a0062be99?auto=format&fit=crop&w=1200&q=80',
+    ],
+    signatureDish: 'Beef Stew Plate',
+    deliveryNote: 'Warm family-style meals with fuller portions for lunch and supper.',
     menu: [
       {
         id: 'beef-stew-plate',
@@ -109,6 +201,8 @@ export const seedVendors: Vendor[] = [
         price: 89,
         prepMinutes: 18,
         badge: 'Comfort meal',
+        imageUrl:
+          'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'samp-beans-bowl',
@@ -116,6 +210,8 @@ export const seedVendors: Vendor[] = [
         description: 'Creamy samp mix with grilled chicken strips and gravy.',
         price: 74,
         prepMinutes: 17,
+        imageUrl:
+          'https://images.unsplash.com/photo-1516684732162-798a0062be99?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'mogodu-saturday',
@@ -124,6 +220,8 @@ export const seedVendors: Vendor[] = [
         price: 84,
         prepMinutes: 24,
         badge: 'Weekend special',
+        imageUrl:
+          'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'lunchbox-combo',
@@ -131,6 +229,8 @@ export const seedVendors: Vendor[] = [
         description: 'Pap, chicken stew, beetroot, and cabbage for school or work.',
         price: 69,
         prepMinutes: 15,
+        imageUrl:
+          'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=900&q=80',
       },
     ],
   },
@@ -148,6 +248,15 @@ export const seedVendors: Vendor[] = [
     spotlight: 'linear-gradient(135deg, #14b8a6 0%, #0f766e 48%, #134e4a 100%)',
     zoneIds: ['kwamhlanga'],
     categories: ['Burgers', 'Wraps', 'Snack boxes'],
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80',
+    galleryImageUrls: [
+      'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1550317138-10000687a72b?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1571091718767-18b5b1457add?auto=format&fit=crop&w=1200&q=80',
+    ],
+    signatureDish: 'Double Cheese Burger',
+    deliveryNote: 'Fast snacks for sports fields, after-school pickups, and late cravings.',
     menu: [
       {
         id: 'double-cheese-burger',
@@ -156,6 +265,8 @@ export const seedVendors: Vendor[] = [
         price: 78,
         prepMinutes: 12,
         badge: 'Fast mover',
+        imageUrl:
+          'https://images.unsplash.com/photo-1550317138-10000687a72b?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'crispy-chicken-wrap',
@@ -163,6 +274,8 @@ export const seedVendors: Vendor[] = [
         description: 'Crispy fillet, crunchy salad, and peri-peri drizzle.',
         price: 72,
         prepMinutes: 11,
+        imageUrl:
+          'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'street-box',
@@ -171,6 +284,8 @@ export const seedVendors: Vendor[] = [
         price: 99,
         prepMinutes: 15,
         badge: 'All-in-one',
+        imageUrl:
+          'https://images.unsplash.com/photo-1571091718767-18b5b1457add?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'masala-fries',
@@ -178,6 +293,8 @@ export const seedVendors: Vendor[] = [
         description: 'Crisp chips tossed with masala spice and garlic sauce.',
         price: 38,
         prepMinutes: 8,
+        imageUrl:
+          'https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?auto=format&fit=crop&w=900&q=80',
       },
     ],
   },
@@ -195,6 +312,15 @@ export const seedVendors: Vendor[] = [
     spotlight: 'linear-gradient(135deg, #fb7185 0%, #be123c 52%, #881337 100%)',
     zoneIds: ['kwaggafontein'],
     categories: ['Pizza', 'Wings', 'Group orders'],
+    coverImageUrl:
+      'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80',
+    galleryImageUrls: [
+      'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?auto=format&fit=crop&w=1200&q=80',
+    ],
+    signatureDish: 'Street Meat Pizza',
+    deliveryNote: 'Shareable trays, wings, and late family-order energy around the main road.',
     menu: [
       {
         id: 'street-meat-pizza',
@@ -203,6 +329,8 @@ export const seedVendors: Vendor[] = [
         price: 126,
         prepMinutes: 22,
         badge: 'Party pick',
+        imageUrl:
+          'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'chicken-mayo-pizza',
@@ -210,6 +338,8 @@ export const seedVendors: Vendor[] = [
         description: 'Creamy chicken mayo base with sweet peppers and herbs.',
         price: 118,
         prepMinutes: 21,
+        imageUrl:
+          'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'wings-share-basket',
@@ -217,6 +347,8 @@ export const seedVendors: Vendor[] = [
         description: 'Twelve saucy wings with wedges and two dips.',
         price: 112,
         prepMinutes: 18,
+        imageUrl:
+          'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=900&q=80',
       },
       {
         id: 'pizza-kota-pocket',
@@ -225,6 +357,8 @@ export const seedVendors: Vendor[] = [
         price: 64,
         prepMinutes: 13,
         badge: 'Local twist',
+        imageUrl:
+          'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=900&q=80',
       },
     ],
   },

@@ -8,9 +8,17 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+/mobile/node_modules
 dist
 dist-ssr
+.expo
+/mobile/.expo
+.env
+.env.*
 *.local
+!*.env.example
+data/
+*.sqlite
 
 # Editor directories and files
 .vscode/*

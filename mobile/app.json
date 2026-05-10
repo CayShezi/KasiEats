@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "KasiEats",
+    "slug": "kasieats",
+    "scheme": "kasieats",
+    "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-notifications"
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f4efe7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cayshezi.kasieats",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.cayshezi.kasieats",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f4efe7"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a603fc32-182c-45f4-93b3-8017a6d5642c"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a603fc32-182c-45f4-93b3-8017a6d5642c"
+      }
+    },
+    "owner": "cayshezi"
+  }
+}
