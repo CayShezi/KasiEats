@@ -3,11 +3,13 @@ services:
     type: web
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
+      - key: NODE_VERSION
+        value: 24.14.1
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
