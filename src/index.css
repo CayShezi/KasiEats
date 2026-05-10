@@ -1,14 +1,14 @@
 :root {
-  --bg: #f4efe7;
-  --bg-accent: #f4efe7;
-  --panel-bg: #fffaf4;
+  --bg: #f7f0e6;
+  --bg-accent: #f2e3cf;
+  --panel-bg: rgba(255, 252, 247, 0.94);
   --panel-border: rgba(125, 76, 46, 0.12);
-  --ink: #2b170b;
-  --ink-soft: #523321;
-  --ink-muted: #7d5b45;
-  --warm-muted: #b45309;
-  --shadow-soft: 0 18px 40px rgba(87, 45, 16, 0.08);
-  --shadow-strong: 0 22px 44px rgba(124, 45, 18, 0.22);
+  --ink: #26170f;
+  --ink-soft: #5b3b28;
+  --ink-muted: #7e6655;
+  --warm-muted: #bb5c1c;
+  --shadow-soft: 0 22px 46px rgba(87, 45, 16, 0.08);
+  --shadow-strong: 0 26px 54px rgba(124, 45, 18, 0.18);
   --font-display: 'Bahnschrift SemiCondensed', 'Aptos Display', 'Trebuchet MS', sans-serif;
   --font-body: 'Aptos', 'Segoe UI', 'Trebuchet MS', sans-serif;
   color: var(--ink);
@@ -34,7 +34,10 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background: #1b120b;
+  background:
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.12), transparent 26%),
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.12), transparent 24%),
+    linear-gradient(180deg, #f8f1e8 0%, #f3e8db 100%);
   color: var(--ink);
 }
 
@@ -92,7 +95,7 @@ p {
 
 #root {
   min-height: 100vh;
-  padding: 18px 0;
+  padding: 22px 0 38px;
 }
 
 ::selection {

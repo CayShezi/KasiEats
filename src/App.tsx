@@ -115,7 +115,7 @@ function readCheckoutFeedbackFromLocation() {
     return 'Card checkout was cancelled. You can try again from the basket whenever you are ready.'
   }
 
-  return 'Production foundation is live: demo accounts, role gates, and dispatch-ready ordering.'
+  return 'Pick a restaurant, add your meal, and we will guide you through a simple local checkout.'
 }
 
 function estimateEtaMinutes(eta: string) {
@@ -171,7 +171,7 @@ function App() {
   })
   const [authBusy, setAuthBusy] = useState(false)
   const [authMessage, setAuthMessage] = useState(
-    'Use the seeded demo roles to test customer, vendor, rider, and admin flows.',
+    'Use the operations hub to test customer, vendor, rider, and admin workflows.',
   )
   const [opsBusy, setOpsBusy] = useState(false)
   const [customerDashboard, setCustomerDashboard] = useState<CustomerDashboard | null>(null)
@@ -658,14 +658,25 @@ function App() {
         </div>
 
         <div className="status-cluster">
-          <span className={`status-pill ${serviceOnline ? 'online' : 'offline'}`}>
-            <span className="status-dot" />
-            {serviceOnline ? 'Dispatch live' : 'Fallback mode'}
-          </span>
+          <nav className="topbar-nav" aria-label="Primary">
+            <a href="#discover">Restaurants</a>
+            <a href="#menu">Menu</a>
+            <a href="#checkout">Checkout</a>
+            <a href="#ops">Operations</a>
+          </nav>
+          <div className="topbar-actions">
+            <span className={`status-pill ${serviceOnline ? 'online' : 'offline'}`}>
+              <span className="status-dot" />
+              {serviceOnline ? 'Orders live' : 'Demo mode'}
+            </span>
+            <a className="header-link-pill" href="#checkout">
+              {basketCount} item{basketCount === 1 ? '' : 's'} in basket
+            </a>
+          </div>
           <p className="status-note">
             {session
-              ? `Signed in as ${session.user.name} with ${session.user.role} access.`
-              : 'Customer, vendor, rider, and admin roles are ready for testing.'}
+              ? `Welcome back, ${session.user.name}. Your ${session.user.role} tools are waiting in the Operations Hub.`
+              : 'Browse local restaurants, compare delivery times, and send a rider request in minutes.'}
           </p>
         </div>
       </header>
@@ -673,16 +684,31 @@ function App() {
       <main className="main-stack">
         <section className="hero-panel">
           <div className="hero-copy">
-            <p className="section-tag">Built for after-school cravings and supper runs.</p>
-            <h2>Township delivery with real roles, stronger ops, and a mobile-first future.</h2>
+            <p className="section-tag">Built for after-school cravings, lunch runs, and supper drop-offs.</p>
+            <h2>Order local favourites around Kwamhlanga and Kwaggafontein without the WhatsApp back-and-forth.</h2>
             <p className="hero-text">
-              KasiEats now separates customer ordering, kitchen operations, rider dispatch, and admin
-              oversight so the platform can scale beyond a landing page into a proper local-delivery
-              system.
+              Browse real restaurant photos, compare delivery times, and place one clean order with clear
+              pickup-point or gate notes. The storefront stays simple for customers, while the operations
+              tools sit in their own hub when you need them.
             </p>
 
+            <div className="hero-actions">
+              <a className="hero-link hero-link-primary" href="#discover">
+                Browse restaurants
+              </a>
+              <a className="hero-link hero-link-secondary" href="#checkout">
+                Open basket
+              </a>
+            </div>
+
+            <div className="hero-benefits" aria-label="Ordering benefits">
+              <span className="hero-benefit">Real dish photos</span>
+              <span className="hero-benefit">Cash, card, or eWallet</span>
+              <span className="hero-benefit">Easy rider notes</span>
+            </div>
+
             <label className="search-field">
-              <span>Search by vendor, dish, or style</span>
+              <span>Search by restaurant, dish, or food style</span>
               <input
                 type="search"
                 placeholder="Try kota, pap bowl, or grilled wings"
@@ -721,12 +747,12 @@ function App() {
 
           <div className="hero-side">
             <div className="zone-spotlight">
-              <p className="spotlight-label">Tonight&apos;s spotlight</p>
+              <p className="spotlight-label">Delivery in your area</p>
               <h3>{activeZoneDetails.name}</h3>
               <p>{activeZoneDetails.blurb}</p>
               <dl className="spotlight-meta">
                 <div>
-                  <dt>Estimated route</dt>
+                  <dt>Typical delivery</dt>
                   <dd>{activeZoneDetails.eta}</dd>
                 </div>
                 <div>
@@ -748,7 +774,25 @@ function App() {
           </div>
         </section>
 
-        <section className="ops-shell">
+        <section className="experience-strip" aria-label="Storefront highlights">
+          <article className="experience-card">
+            <p className="section-tag">In your zone</p>
+            <h3>{visibleVendors.length} restaurants ready now</h3>
+            <p>{activeZoneDetails.coverage}</p>
+          </article>
+          <article className="experience-card highlight">
+            <p className="section-tag">Popular tonight</p>
+            <h3>{featuredVendor?.name ?? 'Local favourites'}</h3>
+            <p>{featuredVendor?.signatureDish ?? 'Kota builds, pap bowls, grilled wings, and home-style plates.'}</p>
+          </article>
+          <article className="experience-card">
+            <p className="section-tag">Simple checkout</p>
+            <h3>Cash, card, or eWallet</h3>
+            <p>Leave clear rider notes for gates, school pickups, taxi ranks, or family landmarks.</p>
+          </article>
+        </section>
+
+        <section className="ops-shell" id="ops">
           <div className="panel role-studio">
             <div className="panel-heading">
               <div>
@@ -954,7 +998,26 @@ function App() {
           </div>
         </section>
 
-        <section className="market-grid">
+        <section className="market-grid" id="discover">
+          <div className="market-intro">
+            <div>
+              <p className="section-tag">Browse local restaurants</p>
+              <h2>Your next meal, sorted by area, speed, and cravings.</h2>
+              <p className="section-summary">
+                Start with the restaurant list, open a menu with photos, then build one clean basket for
+                checkout.
+              </p>
+            </div>
+            <div className="section-actions">
+              <a className="hero-link hero-link-secondary" href="#menu">
+                Jump to menu
+              </a>
+              <a className="hero-link hero-link-primary" href="#checkout">
+                Go to checkout
+              </a>
+            </div>
+          </div>
+
           <div className="panel vendors-panel">
             <div className="panel-heading">
               <div>
@@ -1033,7 +1096,7 @@ function App() {
             </div>
           </div>
 
-          <div className="panel menu-panel">
+          <div className="panel menu-panel" id="menu">
             {selectedVendor ? (
               <>
                 <div className="menu-hero" style={{ background: selectedVendor.spotlight }}>
@@ -1050,6 +1113,11 @@ function App() {
                       <p className="section-tag light-tag">Kitchen selected</p>
                       <h3>{selectedVendor.name}</h3>
                       <p>{selectedVendor.description}</p>
+                      <div className="menu-hero-meta">
+                        <span className="featured-pill">{selectedVendor.rating.toFixed(1)} / 5</span>
+                        <span className="featured-pill">{selectedVendor.eta}</span>
+                        <span className="featured-pill">{currency.format(selectedVendor.deliveryFee)} delivery</span>
+                      </div>
                       <span className="menu-hero-note">
                         {selectedVendor.deliveryNote ?? selectedVendor.signatureDish ?? selectedVendor.tagline}
                       </span>
@@ -1075,10 +1143,11 @@ function App() {
                 <div className="menu-heading">
                   <div>
                     <p className="section-tag">Menu board</p>
-                    <h3>Restaurant-first browsing with clearer dish photos</h3>
+                    <h3>Full menu from {selectedVendor.name}</h3>
                   </div>
                   <p className="supporting-copy">
-                    Browse dishes by restaurant, see what the kitchen is known for, then build a clean single-store basket.
+                    Browse dish photos, compare prep times, and add what you want without leaving the
+                    restaurant view.
                   </p>
                 </div>
 
@@ -1127,7 +1196,7 @@ function App() {
             )}
           </div>
 
-          <aside className="panel basket-panel">
+          <aside className="panel basket-panel" id="checkout">
             <div className="basket-top">
               <div>
                 <p className="section-tag">Current basket</p>
@@ -1270,7 +1339,7 @@ function App() {
                 <p className="section-tag">Latest order</p>
                 <h4>{lastOrder.orderId}</h4>
                 <p>
-                  {lastOrder.vendorName} for {lastOrder.zoneName} · {lastOrder.eta}
+                  {lastOrder.vendorName} | {lastOrder.zoneName} | {lastOrder.eta}
                 </p>
                 <TrackingRail steps={lastOrder.trackingSteps} />
               </article>
@@ -1280,27 +1349,27 @@ function App() {
 
         <section className="trust-grid">
           <article className="trust-card">
-            <p className="section-tag">Security layer</p>
-            <h3>JWT sessions, validation, and role-gated operations</h3>
+            <p className="section-tag">Easy ordering</p>
+            <h3>Restaurant browsing that feels clear from the first click</h3>
             <p>
-              The API now uses input validation, token-based auth, and per-role transitions so kitchens,
-              riders, and admins only see the flows they should manage.
+              Start with the area you are in, compare real food photos, then move through one clean basket
+              instead of hopping between screens.
             </p>
           </article>
           <article className="trust-card">
-            <p className="section-tag">Mobile ready</p>
-            <h3>A separate Expo app now lives in this repo</h3>
+            <p className="section-tag">Local delivery</p>
+            <h3>Built for landmarks, school gates, and taxi-rank pickups</h3>
             <p>
-              The mobile client is built as its own app so customer ordering and operations can grow into
-              a stronger Android and iOS experience without bending the web code.
+              Delivery notes are designed for local routing, so riders can work with house colors, nearby
+              shops, and common community pickup points.
             </p>
           </article>
           <article className="trust-card">
-            <p className="section-tag">Next production step</p>
-            <h3>SQLite, Stripe checkout, and Expo push are now wired in</h3>
+            <p className="section-tag">Safe checkout</p>
+            <h3>Flexible payments and live order progress</h3>
             <p>
-              Orders now persist in SQLite, card payments can move through hosted checkout, and the mobile
-              app can register Expo push tokens for live dispatch updates.
+              Customers can choose cash, card, or eWallet while kitchens and riders keep the order moving
+              through a clearer delivery timeline.
             </p>
           </article>
         </section>
@@ -1377,7 +1446,7 @@ function OrderCard({ order, busy, onAdvance }: OrderCardProps) {
       </div>
 
       <p className="order-meta">
-        {order.customerName} · {order.zoneName} · {order.eta}
+        {order.customerName} | {order.zoneName} | {order.eta}
       </p>
       <p className="order-meta">{order.address}</p>
 
