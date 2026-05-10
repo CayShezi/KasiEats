@@ -1,9 +1,9 @@
 :root {
   --bg: #f4efe7;
-  --bg-accent: #fef2e5;
-  --panel-bg: rgba(255, 252, 247, 0.9);
+  --bg-accent: #f4efe7;
+  --panel-bg: #fffaf4;
   --panel-border: rgba(125, 76, 46, 0.12);
-  --ink: #24140a;
+  --ink: #2b170b;
   --ink-soft: #523321;
   --ink-muted: #7d5b45;
   --warm-muted: #b45309;
@@ -34,10 +34,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 28%),
-    radial-gradient(circle at top right, rgba(20, 184, 166, 0.12), transparent 24%),
-    linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 48%, #f8f4ee 100%);
+  background: #1b120b;
   color: var(--ink);
 }
 
@@ -95,6 +92,7 @@ p {
 
 #root {
   min-height: 100vh;
+  padding: 18px 0;
 }
 
 ::selection {

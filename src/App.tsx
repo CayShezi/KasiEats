@@ -373,6 +373,12 @@ function App() {
   const activeRoleHighlight =
     (activeRole && roleHighlights.find((role) => role.role === activeRole)) || null
   const featuredVendor = selectedVendor ?? visibleVendors[0] ?? vendors[0]
+  const selectedVendorGallery =
+    selectedVendor?.galleryImageUrls?.length
+      ? selectedVendor.galleryImageUrls
+      : selectedVendor?.coverImageUrl
+        ? [selectedVendor.coverImageUrl]
+        : []
   const ordersForOps =
     customerDashboard?.orders ??
     vendorDashboard?.liveOrders ??
@@ -938,19 +944,24 @@ function App() {
             </div>
 
             {featuredVendor ? (
-              <article
-                className="featured-vendor"
-                style={{
-                  backgroundImage: `linear-gradient(180deg, rgba(28, 18, 10, 0.18), rgba(28, 18, 10, 0.82)), url(${featuredVendor.coverImageUrl})`,
-                }}
-              >
-                <p className="section-tag light-tag">Featured kitchen</p>
-                <h4>{featuredVendor.name}</h4>
-                <p>{featuredVendor.deliveryNote ?? featuredVendor.description}</p>
-                <div className="pill-row">
-                  <span className="featured-pill">{featuredVendor.signatureDish ?? 'House favourite'}</span>
-                  <span className="featured-pill">{featuredVendor.rating.toFixed(1)} / 5</span>
-                  <span className="featured-pill">{featuredVendor.eta}</span>
+              <article className="featured-vendor" style={{ background: featuredVendor.spotlight }}>
+                {featuredVendor.coverImageUrl ? (
+                  <img
+                    className="featured-vendor-image"
+                    src={featuredVendor.coverImageUrl}
+                    alt={featuredVendor.name}
+                    loading="lazy"
+                  />
+                ) : null}
+                <div className="featured-vendor-overlay">
+                  <p className="section-tag light-tag">Featured kitchen</p>
+                  <h4>{featuredVendor.name}</h4>
+                  <p>{featuredVendor.deliveryNote ?? featuredVendor.description}</p>
+                  <div className="pill-row">
+                    <span className="featured-pill">{featuredVendor.signatureDish ?? 'House favourite'}</span>
+                    <span className="featured-pill">{featuredVendor.rating.toFixed(1)} / 5</span>
+                    <span className="featured-pill">{featuredVendor.eta}</span>
+                  </div>
                 </div>
               </article>
             ) : null}
@@ -963,17 +974,22 @@ function App() {
                   className={`vendor-card ${selectedVendor?.id === vendor.id ? 'selected' : ''}`}
                   onClick={() => setSelectedVendorId(vendor.id)}
                 >
-                  <div
-                    className="vendor-card-cover"
-                    style={{
-                      backgroundImage: `linear-gradient(180deg, rgba(18, 12, 7, 0.06), rgba(18, 12, 7, 0.74)), url(${vendor.coverImageUrl})`,
-                    }}
-                  >
-                    <span className="vendor-card-mark">{vendor.heroLabel}</span>
-                    <div className="vendor-card-cover-copy">
-                      <p className="vendor-area">{vendor.area}</p>
-                      <h4>{vendor.name}</h4>
-                      <p>{vendor.tagline}</p>
+                  <div className="vendor-card-cover" style={{ background: vendor.spotlight }}>
+                    {vendor.coverImageUrl ? (
+                      <img
+                        className="vendor-card-cover-image"
+                        src={vendor.coverImageUrl}
+                        alt={vendor.name}
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <div className="vendor-card-cover-overlay">
+                      <span className="vendor-card-mark">{vendor.heroLabel}</span>
+                      <div className="vendor-card-cover-copy">
+                        <p className="vendor-area">{vendor.area}</p>
+                        <h4>{vendor.name}</h4>
+                        <p>{vendor.tagline}</p>
+                      </div>
                     </div>
                   </div>
                   <p className="vendor-tagline">{vendor.signatureDish ?? vendor.tagline}</p>
@@ -995,31 +1011,37 @@ function App() {
           <div className="panel menu-panel">
             {selectedVendor ? (
               <>
-                <div
-                  className="menu-hero"
-                  style={{
-                    backgroundImage: `linear-gradient(180deg, rgba(24, 16, 10, 0.16), rgba(24, 16, 10, 0.8)), url(${selectedVendor.coverImageUrl})`,
-                    backgroundColor: selectedVendor.spotlight,
-                  }}
-                >
-                  <div className="menu-hero-copy">
-                    <p className="section-tag light-tag">Kitchen selected</p>
-                    <h3>{selectedVendor.name}</h3>
-                    <p>{selectedVendor.description}</p>
-                    <span className="menu-hero-note">
-                      {selectedVendor.deliveryNote ?? selectedVendor.signatureDish ?? selectedVendor.tagline}
-                    </span>
+                <div className="menu-hero" style={{ background: selectedVendor.spotlight }}>
+                  {selectedVendor.coverImageUrl ? (
+                    <img
+                      className="menu-hero-image"
+                      src={selectedVendor.coverImageUrl}
+                      alt={selectedVendor.name}
+                      loading="lazy"
+                    />
+                  ) : null}
+                  <div className="menu-hero-overlay">
+                    <div className="menu-hero-copy">
+                      <p className="section-tag light-tag">Kitchen selected</p>
+                      <h3>{selectedVendor.name}</h3>
+                      <p>{selectedVendor.description}</p>
+                      <span className="menu-hero-note">
+                        {selectedVendor.deliveryNote ?? selectedVendor.signatureDish ?? selectedVendor.tagline}
+                      </span>
+                    </div>
+                    <div className="menu-hero-mark">{selectedVendor.heroLabel}</div>
                   </div>
-                  <div className="menu-hero-mark">{selectedVendor.heroLabel}</div>
                 </div>
 
-                {selectedVendor.galleryImageUrls?.length ? (
+                {selectedVendorGallery.length ? (
                   <div className="menu-gallery">
-                    {selectedVendor.galleryImageUrls.map((imageUrl) => (
-                      <div
+                    {selectedVendorGallery.map((imageUrl) => (
+                      <img
                         key={imageUrl}
                         className="menu-gallery-shot"
-                        style={{ backgroundImage: `url(${imageUrl})` }}
+                        src={imageUrl}
+                        alt={`${selectedVendor.name} dish`}
+                        loading="lazy"
                       />
                     ))}
                   </div>
@@ -1038,19 +1060,25 @@ function App() {
                 <div className="menu-list">
                   {selectedVendor.menu.map((item) => (
                     <article key={item.id} className="menu-card">
-                      <div
-                        className="menu-card-media"
-                        style={{ backgroundImage: `url(${item.imageUrl ?? selectedVendor.coverImageUrl})` }}
-                      />
-                      <div className="menu-copy">
-                        <div className="menu-title-row">
-                          <h4>{item.name}</h4>
-                          {item.badge ? <span className="menu-badge">{item.badge}</span> : null}
-                        </div>
-                        <p>{item.description}</p>
-                        <div className="pill-row">
-                          <span className="mini-pill">{selectedVendor.name}</span>
-                          <span className="mini-pill">{item.prepMinutes} min</span>
+                      <div className="menu-card-top">
+                        {item.imageUrl || selectedVendor.coverImageUrl ? (
+                          <img
+                            className="menu-item-image"
+                            src={item.imageUrl ?? selectedVendor.coverImageUrl}
+                            alt={item.name}
+                            loading="lazy"
+                          />
+                        ) : null}
+                        <div className="menu-copy">
+                          <div className="menu-title-row">
+                            <h4>{item.name}</h4>
+                            {item.badge ? <span className="menu-badge">{item.badge}</span> : null}
+                          </div>
+                          <p>{item.description}</p>
+                          <div className="pill-row">
+                            <span className="mini-pill">{selectedVendor.name}</span>
+                            <span className="mini-pill">{item.prepMinutes} min</span>
+                          </div>
                         </div>
                       </div>
                       <div className="menu-footer">
