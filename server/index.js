@@ -45,6 +45,26 @@ function createHttpError(statusCode, message) {
   return error
 }
 
+function firstForwardedValue(value) {
+  return String(Array.isArray(value) ? value[0] : value ?? '')
+    .split(',')[0]
+    .trim()
+}
+
+function isSameOriginRequest(origin, request) {
+  try {
+    const originUrl = new URL(origin)
+    const host =
+      firstForwardedValue(request.headers['x-forwarded-host']) || request.get('host') || ''
+    const protocol =
+      firstForwardedValue(request.headers['x-forwarded-proto']) || request.protocol || 'http'
+
+    return originUrl.host === host && originUrl.protocol === `${protocol}:`
+  } catch {
+    return false
+  }
+}
+
 function runInBackground(promise, label) {
   void promise.catch((error) => {
     console.error(`${label} failed`, error)
@@ -52,11 +72,18 @@ function runInBackground(promise, label) {
 }
 
 app.disable('x-powered-by')
+app.set('trust proxy', 1)
 app.use(helmet({ crossOriginResourcePolicy: false }))
-app.use(
+app.use(compression())
+app.use('/api', (request, response, next) => {
   cors({
     origin(origin, callback) {
-      if (!origin || config.allowedOrigins.length === 0 || config.allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        isSameOriginRequest(origin, request) ||
+        config.allowedOrigins.length === 0 ||
+        config.allowedOrigins.includes(origin)
+      ) {
         callback(null, true)
         return
       }
@@ -64,10 +91,9 @@ app.use(
       callback(new Error(`Origin ${origin} is not allowed.`))
     },
     credentials: true,
-  }),
-)
-app.use(compression())
-app.use(
+  })(request, response, next)
+})
+app.use('/api',
   rateLimit({
     windowMs: 15 * 60 * 1000,
     max: config.rateLimitMax,
