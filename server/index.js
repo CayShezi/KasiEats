@@ -73,7 +73,16 @@ function runInBackground(promise, label) {
 
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
-app.use(helmet({ crossOriginResourcePolicy: false }))
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        'img-src': ["'self'", 'data:', 'https://images.unsplash.com', 'https://plus.unsplash.com'],
+      },
+    },
+  }),
+)
 app.use(compression())
 app.use('/api', (request, response, next) => {
   cors({
