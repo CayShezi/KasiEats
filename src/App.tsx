@@ -78,6 +78,31 @@ async function readResponseMessage(response: Response) {
   }
 }
 
+function safeStorageGetItem(key: string) {
+  try {
+    return window.localStorage.getItem(key)
+  } catch (error) {
+    console.warn('Unable to read local storage.', error)
+    return null
+  }
+}
+
+function safeStorageSetItem(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch (error) {
+    console.warn('Unable to write local storage.', error)
+  }
+}
+
+function safeStorageRemoveItem(key: string) {
+  try {
+    window.localStorage.removeItem(key)
+  } catch (error) {
+    console.warn('Unable to remove local storage item.', error)
+  }
+}
+
 function readCheckoutFeedbackFromLocation() {
   const params = new URLSearchParams(window.location.search)
   const payment = params.get('payment')
@@ -164,13 +189,13 @@ function App() {
 
   const persistSession = (nextSession: AuthSession) => {
     setSession(nextSession)
-    localStorage.setItem(storageKey, JSON.stringify(nextSession))
+    safeStorageSetItem(storageKey, JSON.stringify(nextSession))
   }
 
   const clearSession = (message?: string) => {
     setSession(null)
     clearDashboards()
-    localStorage.removeItem(storageKey)
+    safeStorageRemoveItem(storageKey)
 
     if (message) {
       setAuthMessage(message)
@@ -283,7 +308,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey)
+    const saved = safeStorageGetItem(storageKey)
 
     if (!saved) {
       return
@@ -295,7 +320,7 @@ function App() {
         void restoreSavedSession(parsed)
       })
     } catch {
-      localStorage.removeItem(storageKey)
+      safeStorageRemoveItem(storageKey)
     }
   }, [])
 
