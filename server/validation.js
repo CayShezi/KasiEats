@@ -1,12 +1,32 @@
 import { z } from 'zod'
 
 export const zoneIds = ['kwamhlanga', 'kwaggafontein']
+export const operationalRoles = ['vendor', 'rider', 'admin']
 export const orderStatuses = ['placed', 'accepted', 'preparing', 'ready', 'on-route', 'delivered']
+export const pickupRequestStatuses = ['requested', 'accepted', 'collecting', 'on-route', 'delivered']
 export const pushPlatforms = ['android', 'ios', 'web']
 
 export const loginSchema = z.object({
   email: z.email().trim().toLowerCase(),
   password: z.string().min(8, 'Password must be at least 8 characters long.'),
+})
+
+export const registerCustomerSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  email: z.email().trim().toLowerCase(),
+  phone: z.string().trim().min(8).max(24),
+  password: z.string().min(8, 'Password must be at least 8 characters long.'),
+  zoneId: z.enum(zoneIds),
+})
+
+export const adminCreateUserSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  email: z.email().trim().toLowerCase(),
+  phone: z.string().trim().min(8).max(24),
+  password: z.string().min(8, 'Password must be at least 8 characters long.'),
+  role: z.enum(operationalRoles),
+  vendorId: z.string().trim().min(1).max(80).optional(),
+  zoneIds: z.array(z.enum(zoneIds)).max(zoneIds.length).optional().default([]),
 })
 
 export const orderSubmissionSchema = z.object({
@@ -32,6 +52,21 @@ export const orderSubmissionSchema = z.object({
 
 export const orderStatusSchema = z.object({
   status: z.enum(orderStatuses),
+})
+
+export const pickupRequestSubmissionSchema = z.object({
+  customerName: z.string().trim().min(2).max(80),
+  phone: z.string().trim().min(8).max(24),
+  zoneId: z.enum(zoneIds),
+  pickupAddress: z.string().trim().min(8).max(180),
+  dropoffAddress: z.string().trim().min(8).max(180),
+  itemDescription: z.string().trim().min(4).max(180),
+  notes: z.string().trim().max(200).optional().default(''),
+  paymentMethod: z.enum(['cash', 'ewallet']),
+})
+
+export const pickupRequestStatusSchema = z.object({
+  status: z.enum(pickupRequestStatuses),
 })
 
 export const pushRegistrationSchema = z.object({

@@ -13,6 +13,14 @@ const statusLabels = {
   'on-route': 'On route',
   delivered: 'Delivered',
 }
+const pickupStatusSequence = ['requested', 'accepted', 'collecting', 'on-route', 'delivered']
+const pickupStatusLabels = {
+  requested: 'Requested',
+  accepted: 'Driver accepted',
+  collecting: 'Collecting item',
+  'on-route': 'On route',
+  delivered: 'Delivered',
+}
 const paymentStatusLabels = {
   pending: 'Awaiting payment',
   paid: 'Paid',
@@ -35,6 +43,20 @@ const roleTransitions = {
   },
   rider: {
     ready: 'on-route',
+    'on-route': 'delivered',
+  },
+}
+const pickupRoleTransitions = {
+  admin: {
+    requested: 'accepted',
+    accepted: 'collecting',
+    collecting: 'on-route',
+    'on-route': 'delivered',
+  },
+  rider: {
+    requested: 'accepted',
+    accepted: 'collecting',
+    collecting: 'on-route',
     'on-route': 'delivered',
   },
 }
@@ -139,6 +161,14 @@ function buildEta(zoneId) {
   return zoneId === 'kwaggafontein' ? '28-36 min' : '22-30 min'
 }
 
+function buildPickupEta(zoneId) {
+  return zoneId === 'kwaggafontein' ? '42-55 min' : '35-48 min'
+}
+
+function getPickupServiceFee(zoneId) {
+  return zoneId === 'kwaggafontein' ? 45 : 35
+}
+
 function getOrderItems(orderId) {
   return all(
     `
@@ -161,12 +191,26 @@ function statusIndex(status) {
   return statusSequence.indexOf(status)
 }
 
+function pickupStatusIndex(status) {
+  return pickupStatusSequence.indexOf(status)
+}
+
 function buildTrackingSteps(status) {
   const currentIndex = statusIndex(status)
 
   return statusSequence.map((step, index) => ({
     id: step,
     label: statusLabels[step],
+    state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'todo',
+  }))
+}
+
+function buildPickupTrackingSteps(status) {
+  const currentIndex = pickupStatusIndex(status)
+
+  return pickupStatusSequence.map((step, index) => ({
+    id: step,
+    label: pickupStatusLabels[step],
     state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'todo',
   }))
 }
@@ -180,12 +224,22 @@ function getAllowedNextStatuses(role, status, paymentStatus) {
   return nextStatus ? [nextStatus] : []
 }
 
+function getAllowedNextPickupStatuses(role, status, paymentStatus) {
+  if (paymentStatus === 'pending') {
+    return []
+  }
+
+  const nextStatus = pickupRoleTransitions[role]?.[status]
+  return nextStatus ? [nextStatus] : []
+}
+
 function mapOrderRow(row, role = 'customer', message) {
   const vendor = getVendorById(row.vendor_id)
   const zone = resolveZone(row.zone_id)
   const paymentStatus = row.payment_status
 
   return {
+    taskType: 'order',
     orderId: row.id,
     customerName: row.customer_name,
     vendorId: row.vendor_id,
@@ -212,8 +266,54 @@ function mapOrderRow(row, role = 'customer', message) {
   }
 }
 
+function mapPickupRequestRow(row, role = 'customer', message) {
+  const zone = resolveZone(row.zone_id)
+  const paymentStatus = row.payment_status
+
+  return {
+    taskType: 'pickup',
+    requestId: row.id,
+    customerName: row.customer_name,
+    phone: row.phone,
+    zoneId: row.zone_id,
+    zoneName: zone.name,
+    pickupAddress: row.pickup_address,
+    dropoffAddress: row.dropoff_address,
+    itemDescription: row.item_description,
+    paymentMethod: row.payment_method,
+    paymentStatus,
+    paymentStatusLabel: paymentStatusLabels[paymentStatus] ?? 'Payment status unknown',
+    notes: row.notes,
+    serviceFee: Number(row.service_fee),
+    eta: row.eta,
+    status: row.status,
+    statusLabel: pickupStatusLabels[row.status],
+    requestedAt: row.requested_at,
+    assignedRiderName: row.assigned_rider_name ?? null,
+    trackingSteps: buildPickupTrackingSteps(row.status),
+    allowedNextStatuses: getAllowedNextPickupStatuses(role, row.status, paymentStatus),
+    message,
+  }
+}
+
 function listOrders(whereClause = '', params = []) {
   return all(`SELECT * FROM orders ${whereClause} ORDER BY datetime(placed_at) DESC`, params)
+}
+
+function listPickupRequests(whereClause = '', params = []) {
+  return all(`SELECT * FROM pickup_requests ${whereClause} ORDER BY datetime(requested_at) DESC`, params)
+}
+
+function getRecordTimestamp(record) {
+  return record.taskType === 'pickup' ? record.requestedAt : record.placedAt
+}
+
+function sortDispatchRecords(records) {
+  return [...records].sort((left, right) => {
+    const leftTime = new Date(getRecordTimestamp(left)).getTime()
+    const rightTime = new Date(getRecordTimestamp(right)).getTime()
+    return rightTime - leftTime
+  })
 }
 
 function listUsersByRole(role) {
@@ -226,6 +326,114 @@ function getUserRowById(userId) {
 
 function getUserRowByEmail(email) {
   return get('SELECT * FROM users WHERE email = ?', [normalizeEmail(email)]) ?? null
+}
+
+function uniqueZoneIds(zoneIds = []) {
+  return [...new Set(zoneIds)]
+}
+
+function ensureEmailAvailable(email) {
+  if (getUserRowByEmail(email)) {
+    throw createHttpError(409, 'An account with this email already exists.')
+  }
+}
+
+function prepareUserAssignments(role, vendorId, zoneIds = []) {
+  const normalizedZoneIds = uniqueZoneIds(zoneIds)
+
+  if (role === 'customer') {
+    if (vendorId) {
+      throw createHttpError(400, 'Customer accounts cannot be linked to a vendor profile.')
+    }
+
+    if (normalizedZoneIds.length !== 1) {
+      throw createHttpError(400, 'Customer accounts must include one saved delivery zone.')
+    }
+
+    return {
+      vendorId: null,
+      zoneIds: normalizedZoneIds,
+    }
+  }
+
+  if (role === 'vendor') {
+    if (!vendorId) {
+      throw createHttpError(400, 'Vendor accounts must be assigned to a kitchen.')
+    }
+
+    const vendor = getVendorById(vendorId)
+
+    return {
+      vendorId: vendor.id,
+      zoneIds: uniqueZoneIds(vendor.zoneIds),
+    }
+  }
+
+  if (role === 'rider') {
+    if (vendorId) {
+      throw createHttpError(400, 'Rider accounts cannot be linked to a vendor profile.')
+    }
+
+    if (normalizedZoneIds.length === 0) {
+      throw createHttpError(400, 'Rider accounts must include at least one service zone.')
+    }
+
+    return {
+      vendorId: null,
+      zoneIds: normalizedZoneIds,
+    }
+  }
+
+  if (role === 'admin') {
+    if (vendorId) {
+      throw createHttpError(400, 'Admin accounts cannot be linked to a vendor profile.')
+    }
+
+    return {
+      vendorId: null,
+      zoneIds: normalizedZoneIds,
+    }
+  }
+
+  throw createHttpError(400, 'Unsupported account role.')
+}
+
+function insertUserRecord({ name, email, phone, role, password, vendorId = null, zoneIds = [] }) {
+  const id = randomUUID()
+  const normalizedEmail = normalizeEmail(email)
+  const normalizedName = trimForStorage(name, 80)
+  const normalizedPhone = trimForStorage(phone, 24)
+  const serializedZoneIds = JSON.stringify(uniqueZoneIds(zoneIds))
+
+  run(
+    `
+      INSERT INTO users (id, name, email, phone, role, password_hash, vendor_id, zone_ids)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      id,
+      normalizedName,
+      normalizedEmail,
+      normalizedPhone,
+      role,
+      bcrypt.hashSync(password, 8),
+      vendorId,
+      serializedZoneIds,
+    ],
+  )
+
+  return {
+    user: {
+      id,
+      name: normalizedName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      role,
+      vendorId: vendorId ?? undefined,
+      zoneIds: uniqueZoneIds(zoneIds),
+    },
+    tokenVersion: 1,
+  }
 }
 
 function userMatchesZone(user, zoneId) {
@@ -429,6 +637,70 @@ export function verifyUserCredentials(email, password, securityContext = {}) {
   }
 }
 
+export function registerCustomerAccount(payload, securityContext = {}) {
+  const normalizedEmail = normalizeEmail(payload.email)
+  ensureEmailAvailable(normalizedEmail)
+
+  const assignments = prepareUserAssignments('customer', null, [payload.zoneId])
+  const snapshot = insertUserRecord({
+    name: payload.name,
+    email: normalizedEmail,
+    phone: payload.phone,
+    role: 'customer',
+    password: payload.password,
+    ...assignments,
+  })
+
+  logSecurityEvent({
+    eventType: 'auth.register.customer',
+    userId: snapshot.user.id,
+    email: snapshot.user.email,
+    role: snapshot.user.role,
+    ipAddress: securityContext.ipAddress,
+    userAgent: securityContext.userAgent,
+    targetType: 'user',
+    targetId: snapshot.user.id,
+    success: true,
+    message: 'Customer account created from the storefront.',
+  })
+
+  return snapshot
+}
+
+export function createOperationalUser(payload, actor, securityContext = {}) {
+  if (!actor || actor.role !== 'admin') {
+    throw createHttpError(403, 'Only admin accounts can create operational users.')
+  }
+
+  const normalizedEmail = normalizeEmail(payload.email)
+  ensureEmailAvailable(normalizedEmail)
+
+  const assignments = prepareUserAssignments(payload.role, payload.vendorId ?? null, payload.zoneIds ?? [])
+  const snapshot = insertUserRecord({
+    name: payload.name,
+    email: normalizedEmail,
+    phone: payload.phone,
+    role: payload.role,
+    password: payload.password,
+    ...assignments,
+  })
+
+  logSecurityEvent({
+    eventType: 'auth.user.created',
+    userId: actor.id,
+    email: actor.email,
+    role: actor.role,
+    ipAddress: securityContext.ipAddress,
+    userAgent: securityContext.userAgent,
+    targetType: 'user',
+    targetId: snapshot.user.id,
+    success: true,
+    message: `Created ${snapshot.user.role} account for ${snapshot.user.email}.`,
+  })
+
+  return snapshot.user
+}
+
 export function getMarketplace({ zoneId, search } = {}) {
   const normalizedSearch = String(search ?? '').trim().toLowerCase()
   const normalizedZone = String(zoneId ?? '').trim().toLowerCase()
@@ -465,12 +737,17 @@ export function getCustomerDashboard(user) {
   const customerOrders = listOrders('WHERE customer_id = ?', [user.id]).map((order) =>
     mapOrderRow(order, user.role),
   )
+  const pickupRequests = listPickupRequests('WHERE customer_id = ?', [user.id]).map((request) =>
+    mapPickupRequestRow(request, user.role),
+  )
 
   return {
     customerName: user.name,
     savedZone: resolveZone(user.zoneIds?.[0]).name,
-    loyaltyNote: 'Community regulars unlock faster repeat checkout and clearer saved drop points.',
+    loyaltyNote:
+      'Community regulars unlock faster repeat checkout, saved landmarks, and quicker repeat pickup requests.',
     orders: customerOrders,
+    pickupRequests,
   }
 }
 
@@ -516,15 +793,22 @@ export function getVendorDashboard(user) {
 }
 
 export function getRiderDashboard(user) {
-  const tasks = listOrders().filter(
+  const orderTasks = listOrders().filter(
     (order) =>
       order.payment_status !== 'pending' &&
       userMatchesZone(user, order.zone_id) &&
       ((order.status === 'ready' && (!order.assigned_rider_id || order.assigned_rider_id === user.id)) ||
         (order.assigned_rider_id === user.id && order.status !== 'delivered')),
   )
+  const pickupTasks = listPickupRequests().filter(
+    (request) =>
+      userMatchesZone(user, request.zone_id) &&
+      ((request.status === 'requested' &&
+        (!request.assigned_rider_id || request.assigned_rider_id === user.id)) ||
+        (request.assigned_rider_id === user.id && request.status !== 'delivered')),
+  )
 
-  const completedToday = listOrders().filter((order) => {
+  const completedOrdersToday = listOrders().filter((order) => {
     const placedAt = new Date(order.placed_at)
     const now = new Date()
 
@@ -533,36 +817,65 @@ export function getRiderDashboard(user) {
       order.status === 'delivered' &&
       placedAt.toDateString() === now.toDateString()
     )
-  }).length
+  })
+  const completedPickupRequestsToday = listPickupRequests().filter((request) => {
+    const requestedAt = new Date(request.requested_at)
+    const now = new Date()
+
+    return (
+      request.assigned_rider_id === user.id &&
+      request.status === 'delivered' &&
+      requestedAt.toDateString() === now.toDateString()
+    )
+  })
+  const tasks = sortDispatchRecords([
+    ...orderTasks.map((task) => mapOrderRow(task, user.role)),
+    ...pickupTasks.map((task) => mapPickupRequestRow(task, user.role)),
+  ])
+  const completedToday = completedOrdersToday.length + completedPickupRequestsToday.length
+  const earningsToday =
+    completedOrdersToday.length * 28 +
+    completedPickupRequestsToday.reduce((sum, request) => sum + Number(request.service_fee), 0)
 
   return {
     riderName: user.name,
     assignedCount: tasks.filter((task) => task.status !== 'delivered').length,
     completedToday,
-    earningsToday: completedToday * 28,
-    tasks: tasks.map((task) => mapOrderRow(task, user.role)),
+    earningsToday,
+    tasks,
   }
 }
 
 export function getAdminOverview() {
   const orders = listOrders()
+  const pickupRequests = listPickupRequests()
   const activeOrders = orders.filter((order) => order.status !== 'delivered')
+  const activePickupRequests = pickupRequests.filter((request) => request.status !== 'delivered')
   const deliveredToday = orders.filter((order) => {
     const placedAt = new Date(order.placed_at)
     const now = new Date()
     return order.status === 'delivered' && placedAt.toDateString() === now.toDateString()
   }).length
-  const revenueToday = orders.reduce((sum, order) => sum + Number(order.total), 0)
+  const completedPickupRequestsToday = pickupRequests.filter((request) => {
+    const requestedAt = new Date(request.requested_at)
+    const now = new Date()
+    return request.status === 'delivered' && requestedAt.toDateString() === now.toDateString()
+  }).length
+  const revenueToday =
+    orders.reduce((sum, order) => sum + Number(order.total), 0) +
+    pickupRequests.reduce((sum, request) => sum + Number(request.service_fee), 0)
 
   return {
     activeOrders: activeOrders.length,
-    deliveredToday,
+    activePickupRequests: activePickupRequests.length,
+    deliveredToday: deliveredToday + completedPickupRequestsToday,
     revenueToday,
     vendorsOnline: all('SELECT COUNT(*) AS count FROM vendors')[0]?.count ?? 0,
     ridersLive: listUsersByRole('rider').length,
     pendingIssues: [
       'Stripe card payments need live test keys before full end-to-end verification.',
       'Push registration only succeeds on physical mobile devices with Expo notifications enabled.',
+      'Runner pickup requests currently support cash or eWallet service fees while food orders keep full card checkout.',
       'For Render persistence, attach a disk or move to managed Postgres before heavy production traffic.',
     ],
     orderStages: statusSequence.map((status) => ({
@@ -570,8 +883,16 @@ export function getAdminOverview() {
       label: statusLabels[status],
       count: orders.filter((order) => order.status === status).length,
     })),
-    liveOrders: activeOrders.slice(0, 6).map((order) => mapOrderRow(order, 'admin')),
-    headline: `Revenue tracked today: ${currency.format(revenueToday)}`,
+    pickupStages: pickupStatusSequence.map((status) => ({
+      status,
+      label: pickupStatusLabels[status],
+      count: pickupRequests.filter((request) => request.status === status).length,
+    })),
+    liveTasks: sortDispatchRecords([
+      ...activeOrders.slice(0, 6).map((order) => mapOrderRow(order, 'admin')),
+      ...activePickupRequests.slice(0, 6).map((request) => mapPickupRequestRow(request, 'admin')),
+    ]).slice(0, 8),
+    headline: `Revenue tracked today: ${currency.format(revenueToday)} | Pickup jobs active: ${activePickupRequests.length}`,
   }
 }
 
@@ -665,6 +986,60 @@ export function createOrder(payload, actor) {
   )
 }
 
+export function getPickupRequestById(requestId, role = 'customer', message) {
+  const row = get('SELECT * FROM pickup_requests WHERE id = ?', [requestId])
+
+  if (!row) {
+    throw createHttpError(404, 'Pickup request not found.')
+  }
+
+  return mapPickupRequestRow(row, role, message)
+}
+
+export function createPickupRequest(payload, actor) {
+  if (actor && actor.role !== 'customer') {
+    throw createHttpError(403, 'Only customer accounts can create driver pickup requests.')
+  }
+
+  const zone = resolveZone(payload.zoneId)
+  const customerUser = actor?.role === 'customer' ? actor : null
+  const requestId = `KR-${String(randomUUID()).slice(0, 4).toUpperCase()}`
+  const paymentStatus = payload.paymentMethod === 'cash' ? 'cash_on_delivery' : 'paid'
+
+  run(
+    `
+      INSERT INTO pickup_requests (
+        id, customer_id, customer_name, phone, zone_id, pickup_address, dropoff_address,
+        item_description, payment_method, payment_status, notes, status, requested_at, eta, service_fee
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      requestId,
+      customerUser?.id ?? null,
+      payload.customerName || customerUser?.name,
+      payload.phone || customerUser?.phone,
+      zone.id,
+      payload.pickupAddress,
+      payload.dropoffAddress,
+      payload.itemDescription,
+      payload.paymentMethod,
+      paymentStatus,
+      payload.notes,
+      'requested',
+      new Date().toISOString(),
+      buildPickupEta(zone.id),
+      getPickupServiceFee(zone.id),
+    ],
+  )
+
+  return getPickupRequestById(
+    requestId,
+    customerUser?.role ?? 'customer',
+    `Pickup request ${requestId} is queued for a local driver in ${zone.name}.`,
+  )
+}
+
 export function updateOrderStatus(orderId, nextStatus, user, securityContext = {}) {
   const row = get('SELECT * FROM orders WHERE id = ?', [orderId])
 
@@ -728,6 +1103,65 @@ export function updateOrderStatus(orderId, nextStatus, user, securityContext = {
   })
 
   return updatedOrder
+}
+
+export function updatePickupRequestStatus(requestId, nextStatus, user, securityContext = {}) {
+  const row = get('SELECT * FROM pickup_requests WHERE id = ?', [requestId])
+
+  if (!row) {
+    throw createHttpError(404, 'Pickup request not found.')
+  }
+
+  if (user.role === 'rider' && !userMatchesZone(user, row.zone_id)) {
+    throw createHttpError(403, 'This pickup request does not belong to your delivery zone.')
+  }
+
+  if (user.role === 'rider' && row.assigned_rider_id && row.assigned_rider_id !== user.id) {
+    throw createHttpError(403, 'This pickup request is already assigned to another rider.')
+  }
+
+  const allowedNextStatuses = getAllowedNextPickupStatuses(user.role, row.status, row.payment_status)
+
+  if (!allowedNextStatuses.includes(nextStatus)) {
+    throw createHttpError(400, `Role ${user.role} cannot move ${row.status} to ${nextStatus}.`)
+  }
+
+  const shouldAssignRider = user.role === 'rider' && ['accepted', 'collecting', 'on-route'].includes(nextStatus)
+
+  run(
+    `
+      UPDATE pickup_requests
+      SET status = ?, assigned_rider_id = ?, assigned_rider_name = ?
+      WHERE id = ?
+    `,
+    [
+      nextStatus,
+      shouldAssignRider ? user.id : row.assigned_rider_id,
+      shouldAssignRider ? user.name : row.assigned_rider_name,
+      requestId,
+    ],
+  )
+
+  const updatedRequest = getPickupRequestById(
+    requestId,
+    user.role,
+    `Pickup request ${requestId} moved to ${pickupStatusLabels[nextStatus].toLowerCase()}.`,
+  )
+
+  logSecurityEvent({
+    eventType: 'pickup.status.updated',
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    ipAddress: securityContext.ipAddress,
+    userAgent: securityContext.userAgent,
+    targetType: 'pickup-request',
+    targetId: requestId,
+    success: true,
+    message: `Moved pickup request from ${row.status} to ${nextStatus}.`,
+  })
+
+  return updatedRequest
 }
 
 export function attachCheckoutSession(orderId, sessionId, checkoutUrl) {
@@ -855,4 +1289,4 @@ export function logNotificationAttempt({ userId, orderId, token, title, body, st
   )
 }
 
-export { paymentStatusLabels, statusLabels }
+export { paymentStatusLabels, pickupStatusLabels, statusLabels }

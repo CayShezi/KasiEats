@@ -571,6 +571,7 @@
 }
 
 .role-preview,
+.auth-card,
 .insight-card,
 .order-card,
 .basket-item,
@@ -660,11 +661,83 @@
   margin-top: 20px;
 }
 
+.auth-surface-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.auth-card-heading h4 {
+  margin: 6px 0 0;
+}
+
 .auth-form,
 .checkout-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.auth-note {
+  margin: 0;
+}
+
+.account-create-form {
+  margin-top: 8px;
+}
+
+.zone-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkbox-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(125, 76, 46, 0.14);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 248, 239, 0.84);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.checkbox-card:hover,
+.checkbox-card.selected {
+  transform: translateY(-1px);
+  border-color: rgba(234, 88, 12, 0.36);
+  background: #fff1df;
+  box-shadow: 0 16px 26px rgba(154, 52, 18, 0.08);
+}
+
+.checkbox-card input {
+  margin: 0;
+  accent-color: #ea580c;
+}
+
+.checkbox-card strong,
+.checkbox-card small {
+  color: var(--ink);
+}
+
+.checkbox-card small {
+  color: var(--ink-muted);
+}
+
+.provision-summary {
+  margin-top: 18px;
 }
 
 .secondary-button,
@@ -1099,6 +1172,24 @@
   margin-top: 18px;
 }
 
+.section-divider {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(125, 76, 46, 0.14);
+}
+
+.section-divider h3 {
+  margin: 6px 0 8px;
+}
+
+.pickup-fee-summary {
+  margin-top: 14px;
+}
+
+.pickup-preview-card p + p {
+  margin-top: 4px;
+}
+
 .order-card {
   display: flex;
   flex-direction: column;
@@ -1212,12 +1303,14 @@
   }
 
   .role-grid,
+  .auth-surface-grid,
   .experience-strip,
   .stats-grid,
   .dashboard-metrics,
   .form-grid,
   .zone-switcher,
-  .spotlight-meta {
+  .spotlight-meta,
+  .checkbox-grid {
     grid-template-columns: 1fr;
   }
 

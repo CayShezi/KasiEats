@@ -44,7 +44,7 @@ export const demoCredentials: DemoCredential[] = [
     label: 'Customer',
     email: 'customer@kasieats.demo',
     password: 'Welcome123!',
-    summary: 'Places orders, tracks deliveries, and keeps saved drop-off notes.',
+    summary: 'Places food orders, requests driver pickups, and keeps saved drop-off notes.',
     accent: 'linear-gradient(135deg, #f97316 0%, #ea580c 55%, #7c2d12 100%)',
   },
   {
@@ -60,7 +60,7 @@ export const demoCredentials: DemoCredential[] = [
     label: 'Rider',
     email: 'rider@kasieats.demo',
     password: 'Welcome123!',
-    summary: 'Claims ready orders, marks them on-route, and closes the drop-off loop.',
+    summary: 'Claims ready orders, accepts pickup runs, and closes the drop-off loop.',
     accent: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 52%, #1e3a8a 100%)',
   },
   {
@@ -77,8 +77,8 @@ export const roleHighlights: RoleHighlight[] = [
   {
     role: 'customer',
     title: 'Customer ordering',
-    summary: 'Fast checkout, saved landmarks, and order history that fits local delivery reality.',
-    capabilities: ['Guest or signed-in checkout', 'Saved drop-point details', 'Live order timeline'],
+    summary: 'Fast checkout, saved landmarks, and pickup requests that fit local delivery reality.',
+    capabilities: ['Guest or signed-in checkout', 'Driver pickup requests', 'Live order timeline'],
     accent: 'rgba(249, 115, 22, 0.12)',
   },
   {
@@ -91,8 +91,8 @@ export const roleHighlights: RoleHighlight[] = [
   {
     role: 'rider',
     title: 'Rider dispatch',
-    summary: 'Focuses on route clarity, handoff notes, and fast confirmation once a meal leaves the kitchen.',
-    capabilities: ['Zone-aware task list', 'On-route workflow', 'Daily earnings snapshot'],
+    summary: 'Focuses on route clarity, handoff notes, and fast confirmation for meals and pickup errands.',
+    capabilities: ['Zone-aware task list', 'Pickup and drop-off workflow', 'Daily earnings snapshot'],
     accent: 'rgba(37, 99, 235, 0.12)',
   },
   {

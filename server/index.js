@@ -12,7 +12,9 @@ import { createCheckoutSessionForOrder, isStripeReady, verifyStripeWebhook } fro
 import { notifyOrderCreated, notifyOrderStatus } from './push.js'
 import {
   attachCheckoutSession,
+  createOperationalUser,
   createOrder,
+  createPickupRequest,
   getAdminOverview,
   getCustomerDashboard,
   getMarketplace,
@@ -22,16 +24,22 @@ import {
   markCheckoutFailed,
   markCheckoutPaid,
   markOrderPaymentStatus,
+  registerCustomerAccount,
   registerPushToken,
+  updatePickupRequestStatus,
   updateOrderStatus,
   verifyUserCredentials,
 } from './store.js'
 import {
+  adminCreateUserSchema,
   loginSchema,
+  pickupRequestStatusSchema,
+  pickupRequestSubmissionSchema,
   orderStatusSchema,
   orderSubmissionSchema,
   parseWithSchema,
   pushRegistrationSchema,
+  registerCustomerSchema,
 } from './validation.js'
 
 const app = express()
@@ -220,7 +228,7 @@ app.use((request, response, next) => {
 app.get('/api/health', (_request, response) => {
   const payload = {
     ok: true,
-    service: 'KasiEats API',
+    service: 'KasiRunner API',
     timestamp: new Date().toISOString(),
   }
 
@@ -281,6 +289,20 @@ app.post('/api/auth/login', loginRateLimiter, (request, response, next) => {
   }
 })
 
+app.post('/api/auth/register', (request, response, next) => {
+  try {
+    const payload = parseWithSchema(registerCustomerSchema, request.body)
+    const session = registerCustomerAccount(payload, getRequestSecurityContext(request))
+
+    response.status(201).json({
+      token: issueToken(session.user, { tokenVersion: session.tokenVersion }),
+      user: session.user,
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.get('/api/auth/me', authenticateOptional, requireAuth, (request, response) => {
   response.json({
     user: request.user,
@@ -301,6 +323,19 @@ app.get('/api/rider/dashboard', authenticateOptional, requireRole('rider'), (req
 
 app.get('/api/admin/overview', authenticateOptional, requireRole('admin'), (_request, response) => {
   response.json(getAdminOverview())
+})
+
+app.post('/api/admin/users', authenticateOptional, requireRole('admin'), (request, response, next) => {
+  try {
+    const payload = parseWithSchema(adminCreateUserSchema, request.body)
+    const user = createOperationalUser(payload, request.user, getRequestSecurityContext(request))
+
+    response.status(201).json({
+      user,
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 app.post('/api/push/register', authenticateOptional, requireAuth, (request, response, next) => {
@@ -373,6 +408,33 @@ app.post('/api/orders', authenticateOptional, async (request, response, next) =>
   }
 })
 
+app.post('/api/pickup-requests', authenticateOptional, (request, response, next) => {
+  const securityContext = getRequestSecurityContext(request)
+
+  try {
+    const payload = parseWithSchema(pickupRequestSubmissionSchema, request.body)
+    const pickupRequest = createPickupRequest(payload, request.user)
+
+    response.status(201).json(pickupRequest)
+  } catch (error) {
+    if (request.user && error.statusCode === 403) {
+      logSecurityEvent({
+        eventType: 'pickup.create.denied',
+        userId: request.user.id,
+        email: request.user.email,
+        role: request.user.role,
+        ipAddress: securityContext.ipAddress,
+        userAgent: securityContext.userAgent,
+        targetType: 'pickup-request',
+        success: false,
+        message: error.message ?? 'Pickup request denied.',
+      })
+    }
+
+    next(error)
+  }
+})
+
 app.patch(
   '/api/orders/:orderId/status',
   authenticateOptional,
@@ -405,6 +467,41 @@ app.patch(
   },
 )
 
+app.patch(
+  '/api/pickup-requests/:requestId/status',
+  authenticateOptional,
+  requireRole('rider', 'admin'),
+  (request, response, next) => {
+    const securityContext = getRequestSecurityContext(request)
+
+    try {
+      const payload = parseWithSchema(pickupRequestStatusSchema, request.body)
+      const pickupRequest = updatePickupRequestStatus(
+        request.params.requestId,
+        payload.status,
+        request.user,
+        securityContext,
+      )
+
+      response.json(pickupRequest)
+    } catch (error) {
+      logSecurityEvent({
+        eventType: 'pickup.status.denied',
+        userId: request.user.id,
+        email: request.user.email,
+        role: request.user.role,
+        ipAddress: securityContext.ipAddress,
+        userAgent: securityContext.userAgent,
+        targetType: 'pickup-request',
+        targetId: request.params.requestId,
+        success: false,
+        message: error.message ?? 'Pickup status change denied.',
+      })
+      next(error)
+    }
+  },
+)
+
 if (existsSync(distIndex)) {
   app.use(express.static(distDir))
 
@@ -430,5 +527,5 @@ app.use((error, _request, response, _next) => {
 })
 
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`KasiEats API listening on http://0.0.0.0:${config.port}`)
+  console.log(`KasiRunner API listening on http://0.0.0.0:${config.port}`)
 })

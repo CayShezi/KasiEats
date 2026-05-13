@@ -20,7 +20,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    console.error('KasiEats render failure', error, info.componentStack)
+    console.error('KasiRunner render failure', error, info.componentStack)
   }
 
   render() {
@@ -48,7 +48,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
             }}
           >
             <p style={{ margin: 0, fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#b45309' }}>
-              KasiEats client error
+              KasiRunner client error
             </p>
             <h1 style={{ margin: '12px 0 10px', fontSize: '2rem', lineHeight: 1 }}>The web app hit a runtime error.</h1>
             <p style={{ margin: 0, color: '#7d5b45' }}>

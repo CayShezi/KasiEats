@@ -16,14 +16,27 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { demoCredentials, fallbackUsers, seedOrders, stats as seedStats, vendors as seedVendors, zones } from './src/data'
+import {
+  demoCredentials,
+  fallbackUsers,
+  seedOrders,
+  seedPickupRequests,
+  stats as seedStats,
+  vendors as seedVendors,
+  zones,
+} from './src/data'
 import type {
   BasketEntry,
   DemoCredential,
+  DispatchRecord,
   OrderFormState,
   OrderRecord,
   OrderSeed,
   OrderStatus,
+  PickupRequestFormState,
+  PickupRequestRecord,
+  PickupRequestSeed,
+  PickupRequestStatus,
   SessionUser,
   TabId,
   TrackingStep,
@@ -31,6 +44,8 @@ import type {
   Vendor,
   ZoneId,
 } from './src/types'
+
+const appName = 'KasiRunner'
 
 const currency = new Intl.NumberFormat('en-ZA', {
   style: 'currency',
@@ -50,12 +65,30 @@ const emptyOrderForm: OrderFormState = {
   notes: '',
   paymentMethod: 'cash',
 }
+const emptyPickupForm: PickupRequestFormState = {
+  customerName: '',
+  phone: '',
+  zoneId: defaultZone,
+  pickupAddress: '',
+  dropoffAddress: '',
+  itemDescription: '',
+  notes: '',
+  paymentMethod: 'cash',
+}
 const statusSequence: OrderStatus[] = ['placed', 'accepted', 'preparing', 'ready', 'on-route', 'delivered']
 const statusLabels: Record<OrderStatus, string> = {
   placed: 'Placed',
   accepted: 'Kitchen accepted',
   preparing: 'Preparing',
   ready: 'Ready for pickup',
+  'on-route': 'On route',
+  delivered: 'Delivered',
+}
+const pickupStatusSequence: PickupRequestStatus[] = ['requested', 'accepted', 'collecting', 'on-route', 'delivered']
+const pickupStatusLabels: Record<PickupRequestStatus, string> = {
+  requested: 'Requested',
+  accepted: 'Driver accepted',
+  collecting: 'Collecting item',
   'on-route': 'On route',
   delivered: 'Delivered',
 }
@@ -91,6 +124,22 @@ const roleTransitions: Record<UserRole, Partial<Record<OrderStatus, OrderStatus>
     'on-route': 'delivered',
   },
 }
+const pickupRoleTransitions: Record<UserRole, Partial<Record<PickupRequestStatus, PickupRequestStatus>>> = {
+  customer: {},
+  vendor: {},
+  rider: {
+    requested: 'accepted',
+    accepted: 'collecting',
+    collecting: 'on-route',
+    'on-route': 'delivered',
+  },
+  admin: {
+    requested: 'accepted',
+    accepted: 'collecting',
+    collecting: 'on-route',
+    'on-route': 'delivered',
+  },
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -104,6 +153,10 @@ Notifications.setNotificationHandler({
 function estimateEtaMinutes(eta: string) {
   const match = eta.match(/\d+/)
   return match ? Number(match[0]) : 999
+}
+
+function estimatePickupServiceFee(zoneId: ZoneId) {
+  return zoneId === 'kwaggafontein' ? 45 : 35
 }
 
 function mergeVendorVisuals(remoteVendors: Vendor[]) {
@@ -144,8 +197,18 @@ function buildTrackingSteps(status: OrderStatus): TrackingStep[] {
   }))
 }
 
+function buildPickupTrackingSteps(status: PickupRequestStatus): TrackingStep[] {
+  const currentIndex = pickupStatusSequence.indexOf(status)
+
+  return pickupStatusSequence.map((step, index) => ({
+    id: step,
+    label: pickupStatusLabels[step],
+    state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'todo',
+  }))
+}
+
 function materializeOrders(orderSeeds: OrderSeed[], role: UserRole = 'customer'): OrderRecord[] {
-  return orderSeeds.map((order) => {
+  return orderSeeds.map((order, index) => {
     const vendor = seedVendors.find((item) => item.id === order.vendorId) ?? seedVendors[0]
     const zone = zones.find((item) => item.id === order.zoneId) ?? zones[0]
     const nextStatus = roleTransitions[role][order.status]
@@ -154,6 +217,7 @@ function materializeOrders(orderSeeds: OrderSeed[], role: UserRole = 'customer')
       (order.paymentMethod === 'cash' ? 'cash_on_delivery' : order.paymentMethod === 'card' ? 'pending' : 'paid')
 
     return {
+      taskType: 'order',
       orderId: order.id,
       customerName: order.customerName,
       vendorId: order.vendorId,
@@ -174,11 +238,53 @@ function materializeOrders(orderSeeds: OrderSeed[], role: UserRole = 'customer')
       trackingSteps: buildTrackingSteps(order.status),
       allowedNextStatuses: nextStatus ? [nextStatus] : [],
       items: order.items,
+      placedAt: new Date(Date.now() - index * 15 * 60_000).toISOString(),
     }
   })
 }
 
-function createLocalOrder(orderForm: OrderFormState, vendor: Vendor, basket: BasketEntry[], session: SessionUser | null) {
+function materializePickupRequests(
+  pickupSeeds: PickupRequestSeed[],
+  role: UserRole = 'customer',
+): PickupRequestRecord[] {
+  return pickupSeeds.map((request, index) => {
+    const zone = zones.find((item) => item.id === request.zoneId) ?? zones[0]
+    const nextStatus = pickupRoleTransitions[role][request.status]
+    const paymentStatus: PickupRequestRecord['paymentStatus'] =
+      request.paymentStatus ?? (request.paymentMethod === 'cash' ? 'cash_on_delivery' : 'paid')
+
+    return {
+      taskType: 'pickup',
+      requestId: request.id,
+      customerName: request.customerName,
+      phone: request.phone,
+      zoneId: request.zoneId,
+      zoneName: zone.name,
+      pickupAddress: request.pickupAddress,
+      dropoffAddress: request.dropoffAddress,
+      itemDescription: request.itemDescription,
+      paymentMethod: request.paymentMethod,
+      paymentStatus,
+      paymentStatusLabel: paymentStatusLabels[paymentStatus],
+      notes: request.notes,
+      serviceFee: request.serviceFee,
+      eta: request.eta,
+      status: request.status,
+      statusLabel: pickupStatusLabels[request.status],
+      assignedRiderName: request.assignedRiderName,
+      trackingSteps: buildPickupTrackingSteps(request.status),
+      allowedNextStatuses: nextStatus ? [nextStatus] : [],
+      requestedAt: new Date(Date.now() - index * 18 * 60_000).toISOString(),
+    }
+  })
+}
+
+function createLocalOrder(
+  orderForm: OrderFormState,
+  vendor: Vendor,
+  basket: BasketEntry[],
+  session: SessionUser | null,
+): OrderRecord {
   const zone = zones.find((item) => item.id === orderForm.zoneId) ?? zones[0]
   const subtotal = basket.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0)
   const paymentStatus: OrderRecord['paymentStatus'] =
@@ -189,6 +295,7 @@ function createLocalOrder(orderForm: OrderFormState, vendor: Vendor, basket: Bas
         : 'paid'
 
   return {
+    taskType: 'order',
     orderId: `KE-M-${Math.floor(1000 + Math.random() * 9000)}`,
     customerName: orderForm.customerName || session?.name || 'Walk-in customer',
     vendorId: vendor.id,
@@ -208,6 +315,7 @@ function createLocalOrder(orderForm: OrderFormState, vendor: Vendor, basket: Bas
     assignedRiderName: null,
     trackingSteps: buildTrackingSteps('placed'),
     allowedNextStatuses: [],
+    placedAt: new Date().toISOString(),
     items: basket.map((entry) => ({
       id: entry.item.id,
       name: entry.item.name,
@@ -217,13 +325,64 @@ function createLocalOrder(orderForm: OrderFormState, vendor: Vendor, basket: Bas
   }
 }
 
-function computeRoleOrders(role: UserRole, session: SessionUser | null, orders: OrderRecord[]) {
+function createLocalPickupRequest(
+  pickupForm: PickupRequestFormState,
+  session: SessionUser | null,
+): PickupRequestRecord {
+  const zone = zones.find((item) => item.id === pickupForm.zoneId) ?? zones[0]
+  const paymentStatus: PickupRequestRecord['paymentStatus'] =
+    pickupForm.paymentMethod === 'cash' ? 'cash_on_delivery' : 'paid'
+
+  return {
+    taskType: 'pickup',
+    requestId: `KR-M-${Math.floor(1000 + Math.random() * 9000)}`,
+    customerName: pickupForm.customerName || session?.name || 'Walk-in customer',
+    phone: pickupForm.phone || session?.phone || '',
+    zoneId: zone.id,
+    zoneName: zone.name,
+    pickupAddress: pickupForm.pickupAddress,
+    dropoffAddress: pickupForm.dropoffAddress,
+    itemDescription: pickupForm.itemDescription,
+    paymentMethod: pickupForm.paymentMethod,
+    paymentStatus,
+    paymentStatusLabel: paymentStatusLabels[paymentStatus],
+    notes: pickupForm.notes,
+    serviceFee: estimatePickupServiceFee(zone.id),
+    eta: zone.id === 'kwaggafontein' ? '42-55 min' : '35-48 min',
+    status: 'requested' as PickupRequestStatus,
+    statusLabel: pickupStatusLabels.requested,
+    assignedRiderName: null,
+    trackingSteps: buildPickupTrackingSteps('requested'),
+    allowedNextStatuses: [],
+    requestedAt: new Date().toISOString(),
+  }
+}
+
+function getDispatchTimestamp(task: DispatchRecord) {
+  return task.taskType === 'pickup' ? task.requestedAt ?? '' : task.placedAt ?? ''
+}
+
+function sortDispatchRecords(tasks: DispatchRecord[]) {
+  return [...tasks].sort(
+    (left, right) => new Date(getDispatchTimestamp(right)).getTime() - new Date(getDispatchTimestamp(left)).getTime(),
+  )
+}
+
+function computeRoleTasks(
+  role: UserRole,
+  session: SessionUser | null,
+  orders: OrderRecord[],
+  pickupRequests: PickupRequestRecord[],
+) {
   if (!session) {
     return []
   }
 
   if (role === 'customer') {
-    return orders.filter((order) => order.customerName === session.name)
+    return sortDispatchRecords([
+      ...orders.filter((order) => order.customerName === session.name),
+      ...pickupRequests.filter((request) => request.customerName === session.name),
+    ])
   }
 
   if (role === 'vendor') {
@@ -231,19 +390,33 @@ function computeRoleOrders(role: UserRole, session: SessionUser | null, orders: 
   }
 
   if (role === 'rider') {
-    return orders.filter(
-      (order) =>
-        session.zoneIds?.includes(order.zoneId) &&
-        (order.assignedRiderName === session.name ||
-          order.status === 'ready' ||
-          order.status === 'on-route'),
-    )
+    return sortDispatchRecords([
+      ...orders.filter(
+        (order) =>
+          session.zoneIds?.includes(order.zoneId) &&
+          (order.assignedRiderName === session.name || order.status === 'ready' || order.status === 'on-route'),
+      ),
+      ...pickupRequests.filter(
+        (request) =>
+          session.zoneIds?.includes(request.zoneId) &&
+          (request.assignedRiderName === session.name ||
+            request.status === 'requested' ||
+            request.status === 'accepted' ||
+            request.status === 'collecting' ||
+            request.status === 'on-route'),
+      ),
+    ])
   }
 
-  return orders
+  return sortDispatchRecords([...orders, ...pickupRequests])
 }
 
-function getRoleSummary(role: UserRole | null, session: SessionUser | null, orders: OrderRecord[]) {
+function getRoleSummary(
+  role: UserRole | null,
+  session: SessionUser | null,
+  orders: OrderRecord[],
+  pickupRequests: PickupRequestRecord[],
+) {
   if (!role || !session) {
     return {
       headline: 'Choose a demo role to unlock operations',
@@ -251,13 +424,13 @@ function getRoleSummary(role: UserRole | null, session: SessionUser | null, orde
     }
   }
 
-  const filtered = computeRoleOrders(role, session, orders)
+  const filtered = computeRoleTasks(role, session, orders, pickupRequests)
 
   if (role === 'customer') {
     return {
       headline: `Welcome back, ${session.name}`,
       metrics: [
-        { label: 'Orders', value: String(filtered.length) },
+        { label: 'Tasks', value: String(filtered.length) },
         { label: 'Saved zone', value: session.zoneIds?.[0] ?? 'kwamhlanga' },
         { label: 'Mode', value: apiBaseUrl ? 'Live / demo' : 'Offline demo' },
       ],
@@ -283,8 +456,8 @@ function getRoleSummary(role: UserRole | null, session: SessionUser | null, orde
       headline: 'Route dispatch',
       metrics: [
         { label: 'Assigned', value: String(filtered.length) },
-        { label: 'On route', value: String(filtered.filter((order) => order.status === 'on-route').length) },
-        { label: 'Done today', value: String(filtered.filter((order) => order.status === 'delivered').length) },
+        { label: 'On route', value: String(filtered.filter((task) => task.status === 'on-route').length) },
+        { label: 'Done today', value: String(filtered.filter((task) => task.status === 'delivered').length) },
       ],
     }
   }
@@ -292,14 +465,42 @@ function getRoleSummary(role: UserRole | null, session: SessionUser | null, orde
   return {
     headline: 'Operations pulse',
     metrics: [
-      { label: 'Active', value: String(orders.filter((order) => order.status !== 'delivered').length) },
-      { label: 'Delivered', value: String(orders.filter((order) => order.status === 'delivered').length) },
+      {
+        label: 'Active',
+        value: String(
+          [...orders, ...pickupRequests].filter((task) => task.status !== 'delivered').length,
+        ),
+      },
+      {
+        label: 'Delivered',
+        value: String(
+          [...orders, ...pickupRequests].filter((task) => task.status === 'delivered').length,
+        ),
+      },
       {
         label: 'Revenue',
-        value: currency.format(orders.reduce((sum, order) => sum + order.total, 0)),
+        value: currency.format(
+          orders.reduce((sum, order) => sum + order.total, 0) +
+            pickupRequests.reduce((sum, request) => sum + request.serviceFee, 0),
+        ),
       },
     ],
   }
+}
+
+function getTaskActionLabel(task: DispatchRecord, status: OrderStatus | PickupRequestStatus) {
+  if (task.taskType === 'pickup') {
+    if (status === 'accepted') return 'Accept pickup'
+    if (status === 'collecting') return 'Mark collected'
+    if (status === 'on-route') return 'Start drop-off'
+    return 'Close pickup'
+  }
+
+  if (status === 'accepted') return 'Accept order'
+  if (status === 'preparing') return 'Start prep'
+  if (status === 'ready') return 'Mark ready'
+  if (status === 'on-route') return 'Hand to rider'
+  return 'Close order'
 }
 
 async function readResponseMessage(response: Response) {
@@ -371,18 +572,23 @@ export default function App() {
   const [vendors, setVendors] = useState(seedVendors)
   const [stats, setStats] = useState(seedStats)
   const [orders, setOrders] = useState<OrderRecord[]>(materializeOrders(seedOrders))
+  const [pickupRequests, setPickupRequests] = useState<PickupRequestRecord[]>(
+    materializePickupRequests(seedPickupRequests),
+  )
   const [activeZone, setActiveZone] = useState<ZoneId>(defaultZone)
   const [search, setSearch] = useState('')
   const [vendorSort, setVendorSort] = useState<(typeof vendorSortOptions)[number]['id']>('trending')
   const [selectedVendorId, setSelectedVendorId] = useState(seedVendors[0]?.id ?? '')
   const [basket, setBasket] = useState<BasketEntry[]>([])
   const [orderForm, setOrderForm] = useState<OrderFormState>(emptyOrderForm)
+  const [pickupForm, setPickupForm] = useState<PickupRequestFormState>(emptyPickupForm)
   const [lastOrder, setLastOrder] = useState<OrderRecord | null>(null)
+  const [lastPickupRequest, setLastPickupRequest] = useState<PickupRequestRecord | null>(null)
   const [serviceOnline, setServiceOnline] = useState(false)
   const [message, setMessage] = useState(
     apiBaseUrl
-      ? 'Connecting to live API and falling back to offline demo if needed.'
-      : 'Offline demo mode active until EXPO_PUBLIC_API_BASE_URL is configured.',
+      ? 'Connecting to the live API and falling back to offline demo if needed.'
+      : 'Offline demo mode is active until EXPO_PUBLIC_API_BASE_URL is configured.',
   )
   const [busy, setBusy] = useState(false)
 
@@ -427,7 +633,7 @@ export default function App() {
   useEffect(() => {
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       const title = notification.request.content.title ?? 'Dispatch update'
-      const body = notification.request.content.body ?? 'Your KasiEats order has a new update.'
+      const body = notification.request.content.body ?? `Your ${appName} task has a new update.`
       setMessage(`${title}: ${body}`)
     })
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(() => {
@@ -548,8 +754,8 @@ export default function App() {
   const subtotal = basket.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0)
   const deliveryFee = basket.length > 0 && basketVendor ? basketVendor.deliveryFee : 0
   const total = subtotal + deliveryFee
-  const roleOrders = computeRoleOrders(session?.role ?? 'customer', session, orders)
-  const roleSummary = getRoleSummary(session?.role ?? null, session, orders)
+  const roleTasks = computeRoleTasks(session?.role ?? 'customer', session, orders, pickupRequests)
+  const roleSummary = getRoleSummary(session?.role ?? null, session, orders, pickupRequests)
   const selectedVendorGallery =
     selectedVendor?.galleryImageUrls?.length ? selectedVendor.galleryImageUrls : selectedVendor?.coverImageUrl ? [selectedVendor.coverImageUrl] : []
 
@@ -611,6 +817,12 @@ export default function App() {
           customerName: payload.user.role === 'customer' ? current.customerName || payload.user.name : current.customerName,
           phone: payload.user.role === 'customer' ? current.phone || payload.user.phone : current.phone,
         }))
+        setPickupForm((current) => ({
+          ...current,
+          customerName: payload.user.role === 'customer' ? current.customerName || payload.user.name : current.customerName,
+          phone: payload.user.role === 'customer' ? current.phone || payload.user.phone : current.phone,
+          zoneId: payload.user.role === 'customer' ? payload.user.zoneIds?.[0] ?? current.zoneId : current.zoneId,
+        }))
         setServiceOnline(true)
         setMessage(`Signed in live as ${payload.user.name}.`)
       } else {
@@ -626,6 +838,21 @@ export default function App() {
             credential.role === 'customer'
               ? current.phone || fallbackUsers[credential.role].phone
               : current.phone,
+        }))
+        setPickupForm((current) => ({
+          ...current,
+          customerName:
+            credential.role === 'customer'
+              ? current.customerName || fallbackUsers[credential.role].name
+              : current.customerName,
+          phone:
+            credential.role === 'customer'
+              ? current.phone || fallbackUsers[credential.role].phone
+              : current.phone,
+          zoneId:
+            credential.role === 'customer'
+              ? fallbackUsers[credential.role].zoneIds?.[0] ?? current.zoneId
+              : current.zoneId,
         }))
         setMessage(`Signed in offline as ${fallbackUsers[credential.role].name}.`)
       }
@@ -713,6 +940,70 @@ export default function App() {
     }
   }
 
+  const submitPickupRequest = async () => {
+    if (!pickupForm.customerName || !pickupForm.phone || !pickupForm.pickupAddress || !pickupForm.dropoffAddress) {
+      setMessage('Please complete your contact details, pickup point, and drop-off address.')
+      return
+    }
+
+    if (!pickupForm.itemDescription) {
+      setMessage('Describe what the driver should collect before sending the request.')
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      if (apiBaseUrl) {
+        const response = await fetch(`${apiBaseUrl}/api/pickup-requests`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            customerName: pickupForm.customerName,
+            phone: pickupForm.phone,
+            zoneId: pickupForm.zoneId,
+            pickupAddress: pickupForm.pickupAddress,
+            dropoffAddress: pickupForm.dropoffAddress,
+            itemDescription: pickupForm.itemDescription,
+            notes: pickupForm.notes,
+            paymentMethod: pickupForm.paymentMethod,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(await readResponseMessage(response))
+        }
+
+        const remotePickupRequest = (await response.json()) as PickupRequestRecord
+        setLastPickupRequest(remotePickupRequest)
+        setPickupRequests((current) => [
+          remotePickupRequest,
+          ...current.filter((request) => request.requestId !== remotePickupRequest.requestId),
+        ])
+        setMessage(remotePickupRequest.message ?? remotePickupRequest.statusLabel)
+      } else {
+        const localPickupRequest = createLocalPickupRequest(pickupForm, session)
+        setPickupRequests((current) => [localPickupRequest, ...current])
+        setLastPickupRequest(localPickupRequest)
+        setMessage(`${localPickupRequest.requestId} captured in offline demo mode.`)
+      }
+
+      setPickupForm({
+        ...emptyPickupForm,
+        zoneId: pickupForm.zoneId,
+        customerName: session?.role === 'customer' ? session.name : '',
+        phone: session?.role === 'customer' ? session.phone : '',
+      })
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to submit the pickup request.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const advanceOrder = async (orderId: string, nextStatus: OrderStatus) => {
     if (!session) {
       return
@@ -765,6 +1056,64 @@ export default function App() {
     }
   }
 
+  const advancePickupRequest = async (requestId: string, nextStatus: PickupRequestStatus) => {
+    if (!session) {
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      if (apiBaseUrl && token) {
+        const response = await fetch(`${apiBaseUrl}/api/pickup-requests/${requestId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: nextStatus }),
+        })
+
+        if (!response.ok) {
+          throw new Error(await readResponseMessage(response))
+        }
+
+        const updatedRequest = (await response.json()) as PickupRequestRecord
+        setPickupRequests((current) =>
+          current.map((request) => (request.requestId === requestId ? updatedRequest : request)),
+        )
+        setMessage(
+          updatedRequest.message ?? `Pickup request ${requestId} moved to ${pickupStatusLabels[nextStatus].toLowerCase()}.`,
+        )
+      } else {
+        setPickupRequests((current) =>
+          current.map((request) =>
+            request.requestId === requestId
+              ? {
+                  ...request,
+                  status: nextStatus,
+                  statusLabel: pickupStatusLabels[nextStatus],
+                  assignedRiderName:
+                    session.role === 'rider' && nextStatus !== 'delivered'
+                      ? session.name
+                      : request.assignedRiderName,
+                  trackingSteps: buildPickupTrackingSteps(nextStatus),
+                  allowedNextStatuses: pickupRoleTransitions[session.role][nextStatus]
+                    ? [pickupRoleTransitions[session.role][nextStatus] as PickupRequestStatus]
+                    : [],
+                }
+              : request,
+          ),
+        )
+        setMessage(`Pickup request ${requestId} moved to ${pickupStatusLabels[nextStatus].toLowerCase()}.`)
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to update the pickup request.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
@@ -772,10 +1121,10 @@ export default function App() {
       <View style={styles.shell}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>Kwandebele local delivery</Text>
-            <Text style={styles.title}>KasiEats Mobile</Text>
+            <Text style={styles.eyebrow}>Kwandebele food and pickup runs</Text>
+            <Text style={styles.title}>{appName} Mobile</Text>
             <Text style={styles.subtitle}>
-              Customer ordering, rider ops, and kitchen visibility in one mobile-first app.
+              Customer ordering, driver pickup requests, rider ops, and kitchen visibility in one mobile-first app.
             </Text>
           </View>
           <View style={[styles.statusPill, serviceOnline ? styles.livePill : styles.demoPill]}>
@@ -792,7 +1141,7 @@ export default function App() {
             <>
               <View style={styles.heroCard}>
                 <Text style={styles.cardEyebrow}>Service message</Text>
-                <Text style={styles.heroTitle}>Built for Kwamhlanga and Kwaggafontein streets.</Text>
+                <Text style={styles.heroTitle}>Built for Kwamhlanga and Kwaggafontein streets and errands.</Text>
                 <Text style={styles.messageText}>{message}</Text>
               </View>
 
@@ -801,7 +1150,11 @@ export default function App() {
                   <Pressable
                     key={zone.id}
                     style={[styles.zoneChip, activeZone === zone.id && styles.zoneChipActive]}
-                    onPress={() => setActiveZone(zone.id)}
+                    onPress={() => {
+                      setActiveZone(zone.id)
+                      setOrderForm((current) => ({ ...current, zoneId: zone.id }))
+                      setPickupForm((current) => ({ ...current, zoneId: zone.id }))
+                    }}
                   >
                     <Text style={styles.zoneName}>{zone.name}</Text>
                     <Text style={styles.zoneCoverage}>{zone.coverage}</Text>
@@ -968,6 +1321,117 @@ export default function App() {
                   ))}
                 </View>
               ) : null}
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Driver pickup request</Text>
+                <Text style={styles.sectionCopy}>
+                  Use this when the driver must collect a parcel, document, or already-paid item for you.
+                </Text>
+              </View>
+
+              <View style={styles.billCard}>
+                <Row label="Pickup fee" value={currency.format(estimatePickupServiceFee(pickupForm.zoneId))} />
+                <Row
+                  label="Payment"
+                  value={pickupForm.paymentMethod === 'cash' ? 'Cash on handoff' : 'eWallet transfer'}
+                />
+              </View>
+
+              <TextInput
+                value={pickupForm.customerName}
+                onChangeText={(value) => setPickupForm((current) => ({ ...current, customerName: value }))}
+                placeholder="Customer name"
+                placeholderTextColor="#9b7b66"
+                style={styles.searchInput}
+              />
+              <TextInput
+                value={pickupForm.phone}
+                onChangeText={(value) => setPickupForm((current) => ({ ...current, phone: value }))}
+                placeholder="Phone number"
+                placeholderTextColor="#9b7b66"
+                style={styles.searchInput}
+              />
+              <TextInput
+                value={pickupForm.pickupAddress}
+                onChangeText={(value) => setPickupForm((current) => ({ ...current, pickupAddress: value }))}
+                placeholder="Collection point, store desk, clinic, or school office"
+                placeholderTextColor="#9b7b66"
+                style={[styles.searchInput, styles.multilineInput]}
+                multiline
+              />
+              <TextInput
+                value={pickupForm.dropoffAddress}
+                onChangeText={(value) => setPickupForm((current) => ({ ...current, dropoffAddress: value }))}
+                placeholder="Drop-off address or landmark"
+                placeholderTextColor="#9b7b66"
+                style={[styles.searchInput, styles.multilineInput]}
+                multiline
+              />
+              <TextInput
+                value={pickupForm.itemDescription}
+                onChangeText={(value) => setPickupForm((current) => ({ ...current, itemDescription: value }))}
+                placeholder="What should the driver collect?"
+                placeholderTextColor="#9b7b66"
+                style={[styles.searchInput, styles.multilineInput]}
+                multiline
+              />
+              <TextInput
+                value={pickupForm.notes}
+                onChangeText={(value) => setPickupForm((current) => ({ ...current, notes: value }))}
+                placeholder="Collection code, contact person, or special note"
+                placeholderTextColor="#9b7b66"
+                style={[styles.searchInput, styles.multilineInput]}
+                multiline
+              />
+
+              <View style={styles.paymentRow}>
+                {[
+                  { id: 'cash', label: 'Cash' },
+                  { id: 'ewallet', label: 'eWallet' },
+                ].map((option) => (
+                  <Pressable
+                    key={option.id}
+                    style={[
+                      styles.paymentChip,
+                      pickupForm.paymentMethod === option.id && styles.paymentChipActive,
+                    ]}
+                    onPress={() =>
+                      setPickupForm((current) => ({
+                        ...current,
+                        paymentMethod: option.id as PickupRequestFormState['paymentMethod'],
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.paymentChipText,
+                        pickupForm.paymentMethod === option.id && styles.paymentChipTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable style={styles.primaryButtonWide} onPress={() => void submitPickupRequest()}>
+                <Text style={styles.primaryButtonText}>{busy ? 'Working...' : 'Request driver pickup'}</Text>
+              </Pressable>
+
+              {lastPickupRequest ? (
+                <View style={styles.orderFeedCard}>
+                  <Text style={styles.cardEyebrow}>Latest pickup request</Text>
+                  <Text style={styles.menuItemName}>{lastPickupRequest.requestId}</Text>
+                  <Text style={styles.vendorText}>
+                    {lastPickupRequest.zoneName} · {lastPickupRequest.eta} · {currency.format(lastPickupRequest.serviceFee)}
+                  </Text>
+                  <Text style={styles.vendorText}>{lastPickupRequest.itemDescription}</Text>
+                  <View style={styles.pillRow}>
+                    <Text style={styles.pill}>{lastPickupRequest.paymentStatusLabel}</Text>
+                  </View>
+                  <TrackingRail steps={lastPickupRequest.trackingSteps} />
+                </View>
+              ) : null}
             </>
           ) : null}
 
@@ -1067,7 +1531,7 @@ export default function App() {
                 ))}
               </View>
 
-              <Text style={styles.checkoutHint}>
+                <Text style={styles.checkoutHint}>
                 {orderForm.paymentMethod === 'card'
                   ? 'Stripe Checkout will open in the browser for secure card payment.'
                   : orderForm.paymentMethod === 'ewallet'
@@ -1076,7 +1540,7 @@ export default function App() {
               </Text>
 
               <Pressable style={styles.primaryButtonWide} onPress={() => void submitOrder()}>
-                <Text style={styles.primaryButtonText}>{busy ? 'Working...' : 'Request rider'}</Text>
+                <Text style={styles.primaryButtonText}>{busy ? 'Working...' : 'Request food delivery'}</Text>
               </Pressable>
 
               {lastOrder ? (
@@ -1134,27 +1598,48 @@ export default function App() {
                 </View>
               ) : null}
 
-              {roleOrders.map((order) => {
-                const nextStatus = roleTransitions[session?.role ?? 'customer'][order.status]
+              {roleTasks.map((task) => {
+                const nextStatus =
+                  task.taskType === 'pickup'
+                    ? pickupRoleTransitions[session?.role ?? 'customer'][task.status]
+                    : roleTransitions[session?.role ?? 'customer'][task.status]
 
                 return (
-                  <View key={order.orderId} style={styles.orderFeedCard}>
-                    <Text style={styles.cardEyebrow}>{order.statusLabel}</Text>
-                    <Text style={styles.menuItemName}>{order.orderId}</Text>
-                    <Text style={styles.vendorText}>
-                      {order.vendorName} · {order.zoneName} · {currency.format(order.total)}
-                    </Text>
-                    <Text style={styles.vendorText}>{order.address}</Text>
+                  <View key={task.taskType === 'pickup' ? task.requestId : task.orderId} style={styles.orderFeedCard}>
+                    <Text style={styles.cardEyebrow}>{task.statusLabel}</Text>
+                    <Text style={styles.menuItemName}>{task.taskType === 'pickup' ? task.requestId : task.orderId}</Text>
+                    {task.taskType === 'pickup' ? (
+                      <>
+                        <Text style={styles.vendorText}>
+                          Driver pickup · {task.zoneName} · {currency.format(task.serviceFee)}
+                        </Text>
+                        <Text style={styles.vendorText}>{task.pickupAddress}</Text>
+                        <Text style={styles.vendorText}>Drop-off: {task.dropoffAddress}</Text>
+                        <Text style={styles.vendorText}>{task.itemDescription}</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.vendorText}>
+                          {task.vendorName} · {task.zoneName} · {currency.format(task.total)}
+                        </Text>
+                        <Text style={styles.vendorText}>{task.address}</Text>
+                      </>
+                    )}
                     <View style={styles.pillRow}>
-                      <Text style={styles.pill}>{order.paymentStatusLabel}</Text>
+                      <Text style={styles.pill}>{task.paymentStatusLabel}</Text>
+                      {task.assignedRiderName ? <Text style={styles.pill}>{task.assignedRiderName}</Text> : null}
                     </View>
-                    <TrackingRail steps={order.trackingSteps} />
+                    <TrackingRail steps={task.trackingSteps} />
                     {nextStatus ? (
                       <Pressable
                         style={styles.secondaryButton}
-                        onPress={() => void advanceOrder(order.orderId, nextStatus)}
+                        onPress={() =>
+                          task.taskType === 'pickup'
+                            ? void advancePickupRequest(task.requestId, nextStatus as PickupRequestStatus)
+                            : void advanceOrder(task.orderId, nextStatus as OrderStatus)
+                        }
                       >
-                        <Text style={styles.secondaryButtonText}>{statusLabels[nextStatus]}</Text>
+                        <Text style={styles.secondaryButtonText}>{getTaskActionLabel(task, nextStatus)}</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -1178,6 +1663,7 @@ export default function App() {
               <View style={styles.infoCard}>
                 <Text style={styles.menuItemName}>Mobile strengths</Text>
                 <Text style={styles.vendorText}>Offline-first marketplace fallback</Text>
+                <Text style={styles.vendorText}>Food delivery and driver pickup requests in one mobile flow</Text>
                 <Text style={styles.vendorText}>Role-based ops tab for vendor, rider, and admin flows</Text>
                 <Text style={styles.vendorText}>Ready to point at Render with EXPO_PUBLIC_API_BASE_URL</Text>
               </View>
@@ -1186,7 +1672,7 @@ export default function App() {
                 <Text style={styles.menuItemName}>API target</Text>
                 <Text style={styles.credentialText}>{apiBaseUrl || 'Not configured yet'}</Text>
                 <Text style={styles.vendorText}>
-                  Set `EXPO_PUBLIC_API_BASE_URL` to your Render web service URL to use live auth and orders.
+                  Set `EXPO_PUBLIC_API_BASE_URL` to your Render web service URL to use live auth, orders, and pickup requests.
                 </Text>
               </View>
             </>

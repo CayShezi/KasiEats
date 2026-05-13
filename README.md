@@ -1,13 +1,13 @@
-# KasiEats
+# KasiRunner
 
-KasiEats is a township-focused delivery platform for Kwamhlanga and Kwaggafontein in Kwandebele. This repo now includes a stronger production foundation:
+KasiRunner is a township-focused delivery and driver-pickup platform for Kwamhlanga and Kwaggafontein in Kwandebele. This repo now includes a stronger production foundation:
 
 - A secured Express API with role-based access for `customer`, `vendor`, `rider`, and `admin`
-- A file-backed SQLite datastore for users, vendors, menu items, orders, and push-token registrations
+- A file-backed SQLite datastore for users, vendors, menu items, orders, pickup requests, and push-token registrations
 - Stripe Checkout integration for card payments
 - Expo push notification registration and server-side dispatch hooks
 - A React + TypeScript web storefront and operations console
-- An Expo mobile app in [`mobile/`](./mobile) for customer ordering and operational visibility
+- An Expo mobile app in [`mobile/`](./mobile) for customer ordering, pickup requests, and operational visibility
 
 ## Demo roles
 

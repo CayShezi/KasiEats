@@ -4,7 +4,7 @@ import { config } from './config.js'
 const stripe = config.stripeSecretKey
   ? new Stripe(config.stripeSecretKey, {
       appInfo: {
-        name: 'KasiEats',
+        name: 'KasiRunner',
         version: '1.0.0',
       },
     })

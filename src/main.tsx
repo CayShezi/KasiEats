@@ -12,7 +12,7 @@ function showFatalClientError(message: string) {
   root.innerHTML = `
     <div style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#1b120b;color:#fff7ed;font-family:Aptos,Segoe UI,sans-serif;">
       <div style="width:min(720px,100%);border-radius:28px;padding:24px;background:#fffaf4;color:#2b170b;box-shadow:0 28px 56px rgba(10,6,4,0.28);">
-        <p style="margin:0;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;color:#b45309;">KasiEats client error</p>
+        <p style="margin:0;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;color:#b45309;">KasiRunner client error</p>
         <h1 style="margin:12px 0 10px;font-size:2rem;line-height:1;">The web app could not start.</h1>
         <p style="margin:0;color:#7d5b45;">${message}</p>
       </div>
@@ -52,7 +52,7 @@ async function bootstrap() {
       </StrictMode>,
     )
   } catch (error) {
-    console.error('KasiEats bootstrap failure', error)
+    console.error('KasiRunner bootstrap failure', error)
     showFatalClientError(error instanceof Error ? error.message : 'Unable to load the app bundle.')
   }
 }

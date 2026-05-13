@@ -1,6 +1,7 @@
 import type {
   DemoCredential,
   OrderSeed,
+  PickupRequestSeed,
   ServiceStat,
   SessionUser,
   UserRole,
@@ -50,7 +51,7 @@ export const demoCredentials: DemoCredential[] = [
     email: 'customer@kasieats.demo',
     password: 'Welcome123!',
     label: 'Customer',
-    summary: 'Place orders and track meals to your gate or pickup point.',
+    summary: 'Place food orders or request a driver pickup to your gate or pickup point.',
   },
   {
     role: 'vendor',
@@ -64,7 +65,7 @@ export const demoCredentials: DemoCredential[] = [
     email: 'rider@kasieats.demo',
     password: 'Welcome123!',
     label: 'Rider',
-    summary: 'Take ready meals on-route and close delivery loops quickly.',
+    summary: 'Take ready meals and pickup requests on-route, then close delivery loops quickly.',
   },
   {
     role: 'admin',
@@ -329,5 +330,41 @@ export const seedOrders: OrderSeed[] = [
       { id: 'street-box', name: 'Street Snack Box', quantity: 1, price: 99 },
       { id: 'double-cheese-burger', name: 'Double Cheese Burger', quantity: 1, price: 78 },
     ],
+  },
+]
+
+export const seedPickupRequests: PickupRequestSeed[] = [
+  {
+    id: 'KR-2101',
+    customerId: 'customer-001',
+    customerName: 'Thandeka Mabuza',
+    phone: '071 555 0101',
+    zoneId: 'kwamhlanga',
+    pickupAddress: 'Kwamhlanga Plaza pharmacy counter',
+    dropoffAddress: 'House 1122, Kwamhlanga A, near the blue gate',
+    itemDescription: 'Collect chronic medication parcel already paid for.',
+    paymentMethod: 'cash',
+    notes: 'Please call when you reach the pharmacy queue.',
+    serviceFee: 35,
+    eta: '35-48 min',
+    status: 'accepted',
+    assignedRiderName: 'Lebo Mokoena',
+  },
+  {
+    id: 'KR-2102',
+    customerId: null,
+    customerName: 'Ayanda Mokoena',
+    phone: '072 555 0140',
+    zoneId: 'kwaggafontein',
+    pickupAddress: 'Main Road hardware store collection desk',
+    dropoffAddress: 'Extension 6 community hall side gate',
+    itemDescription: 'One bag of cement additives and a paint roller pickup.',
+    paymentMethod: 'ewallet',
+    paymentStatus: 'paid',
+    notes: 'The store will release the parcel under Ayanda Mokoena.',
+    serviceFee: 45,
+    eta: '42-55 min',
+    status: 'requested',
+    assignedRiderName: null,
   },
 ]

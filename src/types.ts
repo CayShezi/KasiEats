@@ -1,6 +1,7 @@
 export type ZoneId = 'kwamhlanga' | 'kwaggafontein'
 export type UserRole = 'customer' | 'vendor' | 'rider' | 'admin'
 export type OrderStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'on-route' | 'delivered'
+export type PickupRequestStatus = 'requested' | 'accepted' | 'collecting' | 'on-route' | 'delivered'
 export type PaymentStatus = 'pending' | 'paid' | 'cash_on_delivery' | 'failed' | 'cancelled'
 export type TrackingState = 'done' | 'current' | 'todo'
 
@@ -64,6 +65,17 @@ export interface OrderFormState {
   paymentMethod: 'cash' | 'card' | 'ewallet'
 }
 
+export interface PickupRequestFormState {
+  customerName: string
+  phone: string
+  zoneId: ZoneId
+  pickupAddress: string
+  dropoffAddress: string
+  itemDescription: string
+  notes: string
+  paymentMethod: 'cash' | 'ewallet'
+}
+
 export interface OrderSubmissionItem {
   vendorId: string
   menuItemId: string
@@ -82,8 +94,19 @@ export interface OrderSubmission {
   items: OrderSubmissionItem[]
 }
 
+export interface PickupRequestSubmission {
+  customerName: string
+  phone: string
+  zoneId: ZoneId
+  pickupAddress: string
+  dropoffAddress: string
+  itemDescription: string
+  notes: string
+  paymentMethod: PickupRequestFormState['paymentMethod']
+}
+
 export interface TrackingStep {
-  id: OrderStatus
+  id: OrderStatus | PickupRequestStatus
   label: string
   state: TrackingState
 }
@@ -97,6 +120,7 @@ export interface OrderLine {
 }
 
 export interface OrderRecord {
+  taskType: 'order'
   orderId: string
   customerName: string
   vendorId: string
@@ -121,6 +145,33 @@ export interface OrderRecord {
   items: OrderLine[]
   message?: string
 }
+
+export interface PickupRequestRecord {
+  taskType: 'pickup'
+  requestId: string
+  customerName: string
+  phone: string
+  zoneId: ZoneId
+  zoneName: string
+  pickupAddress: string
+  dropoffAddress: string
+  itemDescription: string
+  paymentMethod: PickupRequestFormState['paymentMethod']
+  paymentStatus: PaymentStatus
+  paymentStatusLabel: string
+  notes: string
+  serviceFee: number
+  eta: string
+  status: PickupRequestStatus
+  statusLabel: string
+  requestedAt: string
+  assignedRiderName: string | null
+  trackingSteps: TrackingStep[]
+  allowedNextStatuses: PickupRequestStatus[]
+  message?: string
+}
+
+export type DispatchRecord = OrderRecord | PickupRequestRecord
 
 export interface SessionUser {
   id: string
@@ -159,6 +210,7 @@ export interface CustomerDashboard {
   savedZone: string
   loyaltyNote: string
   orders: OrderRecord[]
+  pickupRequests: PickupRequestRecord[]
 }
 
 export interface VendorTopItem {
@@ -181,23 +233,25 @@ export interface RiderDashboard {
   assignedCount: number
   completedToday: number
   earningsToday: number
-  tasks: OrderRecord[]
+  tasks: DispatchRecord[]
 }
 
 export interface AdminStage {
-  status: OrderStatus
+  status: OrderStatus | PickupRequestStatus
   label: string
   count: number
 }
 
 export interface AdminOverview {
   activeOrders: number
+  activePickupRequests: number
   deliveredToday: number
   revenueToday: number
   vendorsOnline: number
   ridersLive: number
   pendingIssues: string[]
   orderStages: AdminStage[]
-  liveOrders: OrderRecord[]
+  pickupStages: AdminStage[]
+  liveTasks: DispatchRecord[]
   headline: string
 }

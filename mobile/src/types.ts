@@ -2,6 +2,7 @@ export type TabId = 'discover' | 'basket' | 'ops' | 'profile'
 export type ZoneId = 'kwamhlanga' | 'kwaggafontein'
 export type UserRole = 'customer' | 'vendor' | 'rider' | 'admin'
 export type OrderStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'on-route' | 'delivered'
+export type PickupRequestStatus = 'requested' | 'accepted' | 'collecting' | 'on-route' | 'delivered'
 export type PaymentStatus = 'pending' | 'paid' | 'cash_on_delivery' | 'failed' | 'cancelled'
 export type TrackingState = 'done' | 'current' | 'todo'
 
@@ -64,6 +65,17 @@ export interface OrderFormState {
   paymentMethod: 'cash' | 'card' | 'ewallet'
 }
 
+export interface PickupRequestFormState {
+  customerName: string
+  phone: string
+  zoneId: ZoneId
+  pickupAddress: string
+  dropoffAddress: string
+  itemDescription: string
+  notes: string
+  paymentMethod: 'cash' | 'ewallet'
+}
+
 export interface SessionUser {
   id: string
   name: string
@@ -83,7 +95,7 @@ export interface DemoCredential {
 }
 
 export interface TrackingStep {
-  id: OrderStatus
+  id: OrderStatus | PickupRequestStatus
   label: string
   state: TrackingState
 }
@@ -97,6 +109,7 @@ export interface OrderLine {
 }
 
 export interface OrderRecord {
+  taskType: 'order'
   orderId: string
   customerName: string
   vendorId: string
@@ -121,6 +134,33 @@ export interface OrderRecord {
   message?: string
 }
 
+export interface PickupRequestRecord {
+  taskType: 'pickup'
+  requestId: string
+  customerName: string
+  phone: string
+  zoneId: ZoneId
+  zoneName: string
+  pickupAddress: string
+  dropoffAddress: string
+  itemDescription: string
+  paymentMethod: PickupRequestFormState['paymentMethod']
+  paymentStatus: PaymentStatus
+  paymentStatusLabel: string
+  notes: string
+  serviceFee: number
+  eta: string
+  status: PickupRequestStatus
+  statusLabel: string
+  assignedRiderName: string | null
+  trackingSteps: TrackingStep[]
+  allowedNextStatuses: PickupRequestStatus[]
+  requestedAt?: string
+  message?: string
+}
+
+export type DispatchRecord = OrderRecord | PickupRequestRecord
+
 export interface OrderSeed {
   id: string
   customerId: string | null
@@ -136,4 +176,22 @@ export interface OrderSeed {
   status: OrderStatus
   assignedRiderName: string | null
   items: OrderLine[]
+}
+
+export interface PickupRequestSeed {
+  id: string
+  customerId: string | null
+  customerName: string
+  phone: string
+  zoneId: ZoneId
+  pickupAddress: string
+  dropoffAddress: string
+  itemDescription: string
+  paymentMethod: PickupRequestFormState['paymentMethod']
+  paymentStatus?: PaymentStatus
+  notes: string
+  serviceFee: number
+  eta: string
+  status: PickupRequestStatus
+  assignedRiderName: string | null
 }

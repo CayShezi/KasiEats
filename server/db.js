@@ -76,6 +76,28 @@ db.exec(`
     FOREIGN KEY (assigned_rider_id) REFERENCES users(id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS pickup_requests (
+    id TEXT PRIMARY KEY,
+    customer_id TEXT,
+    customer_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    zone_id TEXT NOT NULL,
+    pickup_address TEXT NOT NULL,
+    dropoff_address TEXT NOT NULL,
+    item_description TEXT NOT NULL,
+    payment_method TEXT NOT NULL,
+    payment_status TEXT NOT NULL,
+    notes TEXT NOT NULL,
+    status TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    eta TEXT NOT NULL,
+    service_fee INTEGER NOT NULL,
+    assigned_rider_id TEXT,
+    assigned_rider_name TEXT,
+    FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (assigned_rider_id) REFERENCES users(id) ON DELETE SET NULL
+  );
+
   CREATE TABLE IF NOT EXISTS order_items (
     id TEXT PRIMARY KEY,
     order_id TEXT NOT NULL,
@@ -127,6 +149,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_orders_vendor_id ON orders(vendor_id);
   CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
   CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+  CREATE INDEX IF NOT EXISTS idx_pickups_customer_id ON pickup_requests(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_pickups_zone_id ON pickup_requests(zone_id);
+  CREATE INDEX IF NOT EXISTS idx_pickups_status ON pickup_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_pickups_assigned_rider_id ON pickup_requests(assigned_rider_id);
   CREATE INDEX IF NOT EXISTS idx_menu_items_vendor_id ON menu_items(vendor_id);
   CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);
   CREATE INDEX IF NOT EXISTS idx_security_events_user_id ON security_events(user_id);
@@ -472,6 +498,83 @@ function seedDatabase() {
             [item.id, order.id, item.menuItemId, item.name, item.quantity, item.price, item.prepMinutes],
           )
         })
+      })
+    })
+  }
+
+  const pickupRequestCount = get('SELECT COUNT(*) AS count FROM pickup_requests')?.count ?? 0
+
+  if (pickupRequestCount === 0) {
+    const seededPickupRequests = [
+      {
+        id: 'KR-2101',
+        customerId: 'customer-001',
+        customerName: 'Thandeka Mabuza',
+        phone: '071 555 0101',
+        zoneId: 'kwamhlanga',
+        pickupAddress: 'Kwamhlanga Plaza pharmacy counter',
+        dropoffAddress: 'House 1122, Kwamhlanga A, near the blue gate',
+        itemDescription: 'Collect chronic medication parcel already paid for.',
+        paymentMethod: 'cash',
+        paymentStatus: 'cash_on_delivery',
+        notes: 'Please call when you reach the pharmacy queue.',
+        status: 'accepted',
+        requestedAtOffsetMinutes: 42,
+        serviceFee: 35,
+        assignedRiderId: 'rider-001',
+        assignedRiderName: 'Lebo Mokoena',
+      },
+      {
+        id: 'KR-2102',
+        customerId: null,
+        customerName: 'Ayanda Mokoena',
+        phone: '072 555 0140',
+        zoneId: 'kwaggafontein',
+        pickupAddress: 'Main Road hardware store collection desk',
+        dropoffAddress: 'Extension 6 community hall side gate',
+        itemDescription: 'One bag of cement additives and a paint roller pickup.',
+        paymentMethod: 'ewallet',
+        paymentStatus: 'paid',
+        notes: 'The store will release the parcel under Ayanda Mokoena.',
+        status: 'requested',
+        requestedAtOffsetMinutes: 14,
+        serviceFee: 45,
+        assignedRiderId: null,
+        assignedRiderName: null,
+      },
+    ]
+
+    transaction(() => {
+      seededPickupRequests.forEach((request) => {
+        run(
+          `
+            INSERT INTO pickup_requests (
+              id, customer_id, customer_name, phone, zone_id, pickup_address, dropoff_address,
+              item_description, payment_method, payment_status, notes, status, requested_at, eta,
+              service_fee, assigned_rider_id, assigned_rider_name
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            request.id,
+            request.customerId,
+            request.customerName,
+            request.phone,
+            request.zoneId,
+            request.pickupAddress,
+            request.dropoffAddress,
+            request.itemDescription,
+            request.paymentMethod,
+            request.paymentStatus,
+            request.notes,
+            request.status,
+            new Date(Date.now() - request.requestedAtOffsetMinutes * 60_000).toISOString(),
+            request.zoneId === 'kwaggafontein' ? '42-55 min' : '35-48 min',
+            request.serviceFee,
+            request.assignedRiderId,
+            request.assignedRiderName,
+          ],
+        )
       })
     })
   }
