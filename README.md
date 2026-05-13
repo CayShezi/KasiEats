@@ -64,7 +64,7 @@ This runs web linting, the production web build, and a TypeScript check for the 
 
 This project includes [`render.yaml`](./render.yaml) so Render can deploy the web app and API together as a single Node service.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/CayShezi/KasiEats)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/CayShezi/KasiRunner)
 
 Render blueprint notes:
 

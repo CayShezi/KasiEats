@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "KasiRunner",
-    "slug": "kasieats",
-    "scheme": "kasieats",
+    "slug": "kasirunner",
+    "scheme": "kasirunner",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -21,13 +21,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cayshezi.kasieats",
+      "bundleIdentifier": "com.cayshezi.kasirunner",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.cayshezi.kasieats",
+      "package": "com.cayshezi.kasirunner",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#f4efe7"

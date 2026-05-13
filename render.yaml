@@ -1,5 +1,5 @@
 services:
-  - name: kasieats
+  - name: kasirunner
     type: web
     runtime: node
     plan: free

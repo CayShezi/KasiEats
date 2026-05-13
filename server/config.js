@@ -13,7 +13,12 @@ function readPositiveNumber(name, fallback) {
 const env = process.env.NODE_ENV ?? 'development'
 const isProduction = env === 'production'
 const port = readPositiveNumber('PORT', 4000)
-const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://kasieats.onrender.com']
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://kasieats.onrender.com',
+  'https://kasirunner.onrender.com',
+]
 const rawOrigins = process.env.WEB_ORIGIN ?? defaultOrigins.join(',')
 const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? './data')
 const databasePath = path.resolve(dataDir, process.env.DATABASE_FILENAME ?? 'kasieats.sqlite')
@@ -29,8 +34,8 @@ export const config = {
   dataDir,
   databasePath,
   jwtSecret: process.env.JWT_SECRET ?? 'development-only-secret',
-  jwtIssuer: process.env.JWT_ISSUER ?? 'kasieats-api',
-  jwtAudience: process.env.JWT_AUDIENCE ?? 'kasieats-app',
+  jwtIssuer: process.env.JWT_ISSUER ?? 'kasirunner-api',
+  jwtAudience: process.env.JWT_AUDIENCE ?? 'kasirunner-app',
   customerTokenTtl: process.env.JWT_TTL_CUSTOMER ?? '6h',
   vendorTokenTtl: process.env.JWT_TTL_VENDOR ?? '2h',
   riderTokenTtl: process.env.JWT_TTL_RIDER ?? '2h',
