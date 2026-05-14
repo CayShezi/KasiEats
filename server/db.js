@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
+import { accessSync, constants as fsConstants, existsSync, mkdirSync } from 'node:fs'
+import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { config } from './config.js'
 import { vendors, zones } from './data.js'
@@ -175,6 +176,7 @@ ensureColumn('users', 'locked_until', 'TEXT')
 ensureColumn('users', 'last_login_at', 'TEXT')
 ensureColumn('users', 'last_login_ip', 'TEXT')
 ensureColumn('users', 'last_login_user_agent', 'TEXT')
+ensureColumn('notification_logs', 'pickup_request_id', 'TEXT')
 
 function run(sql, params = []) {
   return db.prepare(sql).run(...params)
@@ -581,5 +583,30 @@ function seedDatabase() {
 }
 
 seedDatabase()
+
+export function getDatabaseDiagnostics() {
+  let queryOk = false
+  let directoryWritable = false
+
+  try {
+    queryOk = get('SELECT 1 AS ok')?.ok === 1
+  } catch {
+    queryOk = false
+  }
+
+  try {
+    accessSync(config.dataDir, fsConstants.R_OK | fsConstants.W_OK)
+    directoryWritable = true
+  } catch {
+    directoryWritable = false
+  }
+
+  return {
+    queryOk,
+    databaseFileExists: existsSync(config.databasePath),
+    directoryWritable,
+    usingDefaultDataDir: config.dataDir === path.resolve(process.cwd(), './data'),
+  }
+}
 
 export { all, db, get, mapVendorMenuItems, run, transaction }

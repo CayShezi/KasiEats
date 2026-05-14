@@ -53,9 +53,13 @@ const currency = new Intl.NumberFormat('en-ZA', {
   maximumFractionDigits: 0,
 })
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? ''
-const publicWebUrl = process.env.EXPO_PUBLIC_WEB_URL?.replace(/\/$/, '') ?? ''
-const expoProjectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID?.trim() ?? ''
+const defaultApiBaseUrl = 'https://kasieats.onrender.com'
+const defaultPublicWebUrl = 'https://kasieats.onrender.com'
+const defaultExpoProjectId = 'a603fc32-182c-45f4-93b3-8017a6d5642c'
+const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || defaultApiBaseUrl).replace(/\/$/, '')
+const publicWebUrl = (process.env.EXPO_PUBLIC_WEB_URL?.trim() || defaultPublicWebUrl).replace(/\/$/, '')
+const expoProjectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID?.trim() || defaultExpoProjectId
+const isExpoGo = Constants.appOwnership === 'expo'
 const defaultZone = zones[0]?.id ?? 'kwamhlanga'
 const emptyOrderForm: OrderFormState = {
   customerName: '',
@@ -513,6 +517,14 @@ async function readResponseMessage(response: Response) {
 }
 
 async function registerForPushNotificationsAsync() {
+  if (isExpoGo) {
+    return {
+      token: null,
+      platform: Platform.OS,
+      message: 'Push registration is limited in Expo Go. Use the mobile app normally, or switch to a development build for full push notification support.',
+    }
+  }
+
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('orders', {
       name: 'orders',
@@ -1665,14 +1677,14 @@ export default function App() {
                 <Text style={styles.vendorText}>Offline-first marketplace fallback</Text>
                 <Text style={styles.vendorText}>Food delivery and driver pickup requests in one mobile flow</Text>
                 <Text style={styles.vendorText}>Role-based ops tab for vendor, rider, and admin flows</Text>
-                <Text style={styles.vendorText}>Ready to point at Render with EXPO_PUBLIC_API_BASE_URL</Text>
+                <Text style={styles.vendorText}>Live Render API is the default target for production builds</Text>
               </View>
 
               <View style={styles.infoCard}>
                 <Text style={styles.menuItemName}>API target</Text>
                 <Text style={styles.credentialText}>{apiBaseUrl || 'Not configured yet'}</Text>
                 <Text style={styles.vendorText}>
-                  Set `EXPO_PUBLIC_API_BASE_URL` to your Render web service URL to use live auth, orders, and pickup requests.
+                  Override `EXPO_PUBLIC_API_BASE_URL` only when you want to test a different backend, such as a local API on your laptop.
                 </Text>
               </View>
             </>

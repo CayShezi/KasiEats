@@ -2,11 +2,15 @@ services:
   - name: kasirunner
     type: web
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
     autoDeployTrigger: commit
+    disk:
+      name: app-data
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 10
     envVars:
       - key: NODE_VERSION
         value: 24.14.1

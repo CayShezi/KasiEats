@@ -4,12 +4,14 @@ import express from 'express'
 import rateLimit from 'express-rate-limit'
 import helmet from 'helmet'
 import { existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { authenticateOptional, issueToken, requireAuth, requireRole } from './auth.js'
 import { config } from './config.js'
+import { getDatabaseDiagnostics } from './db.js'
 import { createCheckoutSessionForOrder, isStripeReady, verifyStripeWebhook } from './payments.js'
-import { notifyOrderCreated, notifyOrderStatus } from './push.js'
+import { notifyOrderCreated, notifyOrderStatus, notifyPickupCreated, notifyPickupStatus } from './push.js'
 import {
   attachCheckoutSession,
   createOperationalUser,
@@ -118,8 +120,80 @@ function runInBackground(promise, label) {
   })
 }
 
+function buildRuntimeChecks() {
+  const database = getDatabaseDiagnostics()
+  const checks = [
+    {
+      name: 'database.query',
+      severity: 'error',
+      ok: database.queryOk,
+      message: database.queryOk ? 'SQLite query check passed.' : 'SQLite query check failed.',
+    },
+    {
+      name: 'data.directory',
+      severity: 'error',
+      ok: database.directoryWritable,
+      message: database.directoryWritable
+        ? `Data directory is writable at ${config.dataDir}.`
+        : `Data directory is not writable at ${config.dataDir}.`,
+    },
+    {
+      name: 'database.file',
+      severity: 'error',
+      ok: database.databaseFileExists,
+      message: database.databaseFileExists
+        ? `Database file is present at ${config.databasePath}.`
+        : `Database file is missing at ${config.databasePath}.`,
+    },
+    {
+      name: 'web.origins',
+      severity: 'error',
+      ok: config.allowedOrigins.length > 0,
+      message:
+        config.allowedOrigins.length > 0
+          ? `Allowed web origins configured: ${config.allowedOrigins.join(', ')}.`
+          : 'No allowed web origins are configured.',
+    },
+    {
+      name: 'payments.stripe',
+      severity: 'warning',
+      ok: isStripeReady(),
+      message: isStripeReady()
+        ? 'Stripe Checkout is configured.'
+        : 'Stripe Checkout is disabled until STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are set.',
+    },
+    {
+      name: 'storage.persistence',
+      severity: 'warning',
+      ok: !(config.isProduction && database.usingDefaultDataDir),
+      message:
+        config.isProduction && database.usingDefaultDataDir
+          ? 'Production is using the default local data directory. Attach persistent storage before scaling traffic.'
+          : `Data directory is set to ${config.dataDir}.`,
+    },
+  ]
+
+  return {
+    ready: checks.filter((check) => check.severity === 'error').every((check) => check.ok),
+    checks,
+  }
+}
+
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
+app.use((request, response, next) => {
+  const requestId = randomUUID()
+  const startedAt = Date.now()
+  request.requestId = requestId
+  response.setHeader('x-request-id', requestId)
+
+  response.on('finish', () => {
+    const duration = Date.now() - startedAt
+    console.log(`[${requestId}] ${request.method} ${request.originalUrl} -> ${response.statusCode} (${duration}ms)`)
+  })
+
+  next()
+})
 const loginRateLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: config.loginRateLimitMax,
@@ -144,12 +218,7 @@ app.use(compression())
 app.use('/api', (request, response, next) => {
   cors({
     origin(origin, callback) {
-      if (
-        !origin ||
-        isSameOriginRequest(origin, request) ||
-        config.allowedOrigins.length === 0 ||
-        config.allowedOrigins.includes(origin)
-      ) {
+      if (!origin || isSameOriginRequest(origin, request) || config.allowedOrigins.includes(origin)) {
         callback(null, true)
         return
       }
@@ -214,16 +283,6 @@ app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' 
 })
 
 app.use(express.json({ limit: '1mb' }))
-app.use((request, response, next) => {
-  const startedAt = Date.now()
-
-  response.on('finish', () => {
-    const duration = Date.now() - startedAt
-    console.log(`${request.method} ${request.originalUrl} -> ${response.statusCode} (${duration}ms)`)
-  })
-
-  next()
-})
 
 app.get('/api/health', (_request, response) => {
   const payload = {
@@ -243,6 +302,19 @@ app.get('/api/health', (_request, response) => {
           pushProvider: 'expo',
         },
   )
+})
+
+app.get('/api/ready', (_request, response) => {
+  const readiness = buildRuntimeChecks()
+
+  response.status(readiness.ready ? 200 : 503).json({
+    ok: readiness.ready,
+    service: 'KasiRunner API',
+    timestamp: new Date().toISOString(),
+    checks: config.isProduction
+      ? readiness.checks.map(({ name, severity, ok }) => ({ name, severity, ok }))
+      : readiness.checks,
+  })
 })
 
 app.get('/api/marketplace', (request, response) => {
@@ -415,6 +487,11 @@ app.post('/api/pickup-requests', authenticateOptional, (request, response, next)
     const payload = parseWithSchema(pickupRequestSubmissionSchema, request.body)
     const pickupRequest = createPickupRequest(payload, request.user)
 
+    runInBackground(
+      notifyPickupCreated(pickupRequest),
+      `push notifications for pickup request ${pickupRequest.requestId}`,
+    )
+
     response.status(201).json(pickupRequest)
   } catch (error) {
     if (request.user && error.statusCode === 403) {
@@ -483,6 +560,11 @@ app.patch(
         securityContext,
       )
 
+      runInBackground(
+        notifyPickupStatus(pickupRequest),
+        `push notifications for pickup status ${pickupRequest.requestId}`,
+      )
+
       response.json(pickupRequest)
     } catch (error) {
       logSecurityEvent({
@@ -510,22 +592,34 @@ if (existsSync(distIndex)) {
   })
 }
 
-app.use((_request, response) => {
+app.use((request, response) => {
   response.status(404).json({
     message: 'Route not found.',
+    requestId: request.requestId ?? null,
   })
 })
 
-app.use((error, _request, response, _next) => {
-  const statusCode = error.statusCode ?? 500
+app.use((error, request, response, _next) => {
+  const invalidJson = error instanceof SyntaxError && error.status === 400 && 'body' in error
+  const statusCode = invalidJson ? 400 : (error.statusCode ?? 500)
   const message =
-    statusCode >= 500 && config.isProduction ? 'Internal server error.' : error.message ?? 'Unknown error.'
+    invalidJson
+      ? 'Request body must be valid JSON.'
+      : statusCode >= 500 && config.isProduction
+        ? 'Internal server error.'
+        : error.message ?? 'Unknown error.'
 
   response.status(statusCode).json({
     message,
+    requestId: request.requestId ?? null,
   })
 })
 
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`KasiRunner API listening on http://0.0.0.0:${config.port}`)
+  const readiness = buildRuntimeChecks()
+
+  console.log(`KasiRunner API listening on http://0.0.0.0:${config.port} (${config.env})`)
+  console.log(
+    `Readiness: ${readiness.ready ? 'ready' : 'degraded'} | data=${config.dataDir} | origins=${config.allowedOrigins.join(', ')}`,
+  )
 })

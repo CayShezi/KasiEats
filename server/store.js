@@ -1270,6 +1270,29 @@ export function getPushRecipientsForOrderStatus(orderId) {
   return recipients
 }
 
+export function getPushRecipientsForPickupCreated(requestId) {
+  const pickupRequest = getPickupRequestById(requestId)
+  const riders = listUsersByRole('rider').filter((user) => userMatchesZone(user, pickupRequest.zoneId))
+  const admins = listUsersByRole('admin')
+
+  return [...riders, ...admins]
+}
+
+export function getPushRecipientsForPickupStatus(requestId) {
+  const row = get('SELECT customer_id FROM pickup_requests WHERE id = ?', [requestId])
+  const recipients = []
+
+  if (row?.customer_id) {
+    const customerRow = get('SELECT * FROM users WHERE id = ?', [row.customer_id])
+
+    if (customerRow) {
+      recipients.push(toPublicUser(customerRow))
+    }
+  }
+
+  return recipients
+}
+
 export function getPushTokensForUsers(userIds) {
   if (!userIds.length) {
     return []
@@ -1279,13 +1302,34 @@ export function getPushTokensForUsers(userIds) {
   return all(`SELECT user_id, token, platform FROM push_tokens WHERE user_id IN (${placeholders})`, userIds)
 }
 
-export function logNotificationAttempt({ userId, orderId, token, title, body, status, providerResponse }) {
+export function logNotificationAttempt({
+  userId,
+  orderId = null,
+  pickupRequestId = null,
+  token,
+  title,
+  body,
+  status,
+  providerResponse,
+}) {
   run(
     `
-      INSERT INTO notification_logs (id, user_id, order_id, token, title, body, status, provider_response)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO notification_logs (
+        id, user_id, order_id, pickup_request_id, token, title, body, status, provider_response
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    [randomUUID(), userId ?? null, orderId ?? null, token, title, body, status, providerResponse ?? null],
+    [
+      randomUUID(),
+      userId ?? null,
+      orderId,
+      pickupRequestId,
+      token,
+      title,
+      body,
+      status,
+      providerResponse ?? null,
+    ],
   )
 }
 

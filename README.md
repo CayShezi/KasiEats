@@ -32,6 +32,8 @@ Optional environment variables live in [`.env.example`](./.env.example).
 Important variables:
 
 - `DATA_DIR` and `DATABASE_FILENAME` control where the SQLite database file is stored
+- `WEB_ORIGIN` accepts a comma-separated allowlist for the web client origins
+- `PUSH_REQUEST_TIMEOUT_MS` controls how long the API waits on Expo push before marking a background send attempt as failed
 - `STRIPE_SECRET_KEY` enables hosted card checkout
 - `STRIPE_WEBHOOK_SECRET` verifies Stripe webhook events before marking orders as paid
 
@@ -43,7 +45,13 @@ Without Stripe keys, cash and eWallet flows still work, but card checkout correc
 npm run mobile:start
 ```
 
-The Expo app lives in [`mobile/`](./mobile). Set `EXPO_PUBLIC_API_BASE_URL` in [`mobile/.env.example`](./mobile/.env.example) when you want the mobile client to talk to a deployed API instead of its local demo fallback.
+The Expo app lives in [`mobile/`](./mobile). It now defaults to the live Render API in [`mobile/.env.example`](./mobile/.env.example), and you can override `EXPO_PUBLIC_API_BASE_URL` when you want the app to target a different backend such as a laptop on the same Wi-Fi.
+
+Helpful mobile commands:
+
+- `npm run mobile:lan` starts Expo Go in LAN mode for devices on the same Wi-Fi
+- `npm run mobile:tunnel` starts Expo Go with a tunnel when LAN discovery is unreliable
+- `npm run mobile:doctor` runs Expo health checks before you cut a build
 
 For mobile push notifications, also set:
 
@@ -51,6 +59,7 @@ For mobile push notifications, also set:
 - `EXPO_PUBLIC_EXPO_PROJECT_ID` so the mobile app can request an Expo push token
 
 Push registration is intended for a physical device or a supported development build.
+Expo Go can still run the main ordering and pickup flows, but full remote push registration needs a development build or release build.
 
 ## Verification
 
@@ -68,8 +77,11 @@ This project includes [`render.yaml`](./render.yaml) so Render can deploy the we
 
 Render blueprint notes:
 
+- The current Blueprint is set to the paid `starter` plan because Render only supports persistent disks on paid services
 - `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are declared with `sync: false`, so Render prompts for them during the initial Blueprint setup
 - `DATA_DIR` points at `/opt/render/project/src/storage`
+- The Blueprint includes a 10 GB persistent disk mounted at `/opt/render/project/src/storage`
+- Render health checks target `/api/ready`, which validates SQLite access and writable storage instead of only checking that the process is alive
 - For real persistence on Render, attach a persistent disk to the service or move the app to a managed database
 - Stripe webhook target on Render should point to `/api/payments/stripe/webhook`
 
@@ -88,4 +100,4 @@ Stripe and Expo docs used for this setup:
 
 ## Honest production note
 
-This repo now has a stronger production-ready foundation for auth, roles, validation, SQLite persistence, Stripe-hosted card checkout, and Expo push delivery. The next step after this is operational hardening: managed secrets, a persistent Render disk or managed database, real payment reconciliation, and push credentials configured through Expo/EAS for the final mobile builds.
+This repo now has a stronger production-ready foundation for auth, roles, validation, SQLite persistence, Stripe-hosted card checkout, Expo push delivery, pickup-request notifications, and readiness checks for deployment health. The next step after this is operational hardening beyond the repo itself: managed secrets, a persistent Render disk or managed database, real payment reconciliation, and push credentials configured through Expo/EAS for the final mobile builds.

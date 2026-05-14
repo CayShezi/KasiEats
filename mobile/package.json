@@ -4,9 +4,13 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
+    "start:go": "expo start --go",
+    "start:lan": "expo start --go --lan",
+    "start:tunnel": "expo start --go --tunnel",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "doctor": "npx expo-doctor",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
